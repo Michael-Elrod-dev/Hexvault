@@ -10,8 +10,7 @@
 @import "@fontsource/geist-mono/500.css";
 @import "@fontsource/geist-mono/600.css";
 
-/* Design tokens — the single source of truth for the look.
-   Warm charcoal neutral ramp with one terracotta accent; no other hue. */
+/* Design tokens. Warm charcoal neutrals with one terracotta accent. */
 @theme {
   --color-bg: #191714;
   --color-surface: #1d1b17;
@@ -63,9 +62,7 @@
     color: #0e0d0b;
   }
 
-  /* Native scrollbars occupy layout width, which makes horizontal padding
-     uneven depending on whether they are showing. ScrollArea draws an overlay
-     thumb instead. */
+  /* Hide native scrollbars. ScrollArea draws an overlay thumb. */
   ::-webkit-scrollbar {
     width: 0;
     height: 0;

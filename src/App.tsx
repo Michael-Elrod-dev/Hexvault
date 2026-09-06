@@ -81,9 +81,8 @@ export default function App() {
     try {
       let payload = current;
       if (isTauri()) {
-        // innerSize, not outerSize: the outer size includes the invisible
-        // resize border, and restoring that as the requested size makes the
-        // window grow a little on every launch.
+        // innerSize, not outerSize. The outer size includes the resize border,
+        // and restoring it makes the window grow a little on every launch.
         const window_ = getCurrentWindow();
         const scale = await window_.scaleFactor();
         const inner = (await window_.innerSize()).toLogical(scale);
@@ -125,9 +124,8 @@ export default function App() {
   /* ---------- ranks ---------- */
 
   /**
-   * A rank we could not confirm must never keep showing its cached value —
-   * that would look current when it is not. On any failure the affected
-   * accounts are marked so the card renders "Error"; the reason goes to a toast.
+   * Failed accounts render "Error" instead of their cached rank. The reason
+   * goes to a toast.
    */
   const refresh = useCallback(
     async (accounts: Account[], quiet = false) => {
@@ -146,14 +144,13 @@ export default function App() {
           notify(
             failed.length === 1
               ? `${failed[0].riot_name}: ${reason}`
-              : `${failed.length} accounts failed to refresh — ${reason}`,
+              : `${failed.length} accounts failed to refresh: ${reason}`,
           );
         } else if (!quiet) {
           notify("Ranks up to date");
         }
       } catch (e) {
-        // Whole-request failure: mark every requested account so no stale value
-        // is left on screen pretending to be current.
+        // Whole request failed. Mark every account as errored.
         setRanks((prev) => {
           const next = { ...prev };
           for (const a of accounts) next[accountKey(a)] = "Connection Error";
@@ -190,8 +187,7 @@ export default function App() {
     };
   }, [refresh]);
 
-  // Champion data refreshes in the background at launch; when Riot has
-  // something new the UI redraws in place rather than needing a restart.
+  // Redraw when the background champion refresh finds something new.
   useEffect(() => {
     if (!isTauri()) return;
     const unlisten = listen<ChampionData>("champions-updated", (event) => {
@@ -203,11 +199,8 @@ export default function App() {
   }, []);
 
   /**
-   * Snap stored pool names to Riot's canonical spelling.
-   *
-   * A name that differs only in case ("K'sante" vs "K'Sante") breaks portrait
-   * lookup and the already-in-pool check. Runs whenever the index changes, so
-   * it also repairs names Riot renames later.
+   * Snap stored pool names to Riot's spelling. A case mismatch breaks portrait
+   * lookup and the duplicate check.
    */
   useEffect(() => {
     if (champions.champions.length === 0 || !latest.current) return;
@@ -362,7 +355,6 @@ export default function App() {
         p.role === role ? { ...p, champions: [...p.champions, champion.name] } : p,
       ),
     }));
-    // Picking closes the row; reopening with + is one click if you want another.
     setAddingRole(null);
     setAddDraft("");
     setAddHighlight(0);
@@ -380,8 +372,7 @@ export default function App() {
     notify(`Removed ${name}`);
   };
 
-  /* Reordering is confined to one role: a tile only reacts to a drag that
-     started in its own pool, so a champion can never hop roles by accident. */
+  // Only accept drags that started in the same role.
   const reorderChampionByDrag = (role: string, over: number) => {
     if (!champDrag || champDrag.role !== role || champDrag.index === over) return;
     const from = champDrag.index;
@@ -460,8 +451,7 @@ export default function App() {
           onDragOver={reorderByDrag}
           onDragEnd={() => {
             setDragIndex(null);
-            // Only claim a save when the order actually changed; a plain click
-            // also fires dragend.
+            // A plain click also fires dragend. Only notify when the order changed.
             if (dragMoved.current) notify("Order saved");
             dragMoved.current = false;
           }}
@@ -503,8 +493,7 @@ export default function App() {
           onChampDragOver={reorderChampionByDrag}
           onChampDragEnd={() => {
             setChampDrag(null);
-            // A plain click fires dragend too, so only claim a save when the
-            // order actually moved.
+            // A plain click also fires dragend. Only notify when the order changed.
             if (champDragMoved.current) notify("Order saved");
             champDragMoved.current = false;
           }}

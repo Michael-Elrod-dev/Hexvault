@@ -3,10 +3,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Account, Bootstrap, Config } from "./types";
 import { isTauri, mockBootstrap, mockRanks } from "./mock";
 
-/**
- * True only when running `npm run dev` in a plain browser. A release build sets
- * import.meta.env.DEV to false, so the mock branch is dropped at build time.
- */
+/** True when running `npm run dev` in a plain browser. Dead code in release builds. */
 const useMock = () => import.meta.env.DEV && !isTauri();
 
 export const bootstrap = async (): Promise<Bootstrap> =>

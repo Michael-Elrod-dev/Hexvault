@@ -9,12 +9,8 @@ type Props = {
 };
 
 /**
- * Scroll container with an overlay scrollbar.
- *
- * The native scrollbar is hidden because it occupies layout width, which makes
- * the left and right padding unequal depending on whether it is showing. This
- * draws the thumb on top of the content instead, so horizontal padding stays
- * symmetric, and fades it out shortly after scrolling stops.
+ * Scroll container with an overlay scrollbar. The native one takes layout width
+ * and unbalances the horizontal padding.
  */
 export function ScrollArea({ className, children }: Props) {
   const viewport = useRef<HTMLDivElement>(null);

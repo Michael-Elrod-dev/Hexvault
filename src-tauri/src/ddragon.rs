@@ -1,12 +1,5 @@
-//! Data Dragon: champion names, ids, and portrait images.
-//!
-//! Cache-first by design. The app never waits on the network: `cached()` reads
-//! whatever is already on disk and returns instantly, while `refresh()` runs in
-//! the background and emits an event only when something actually changed.
-//!
-//! Riot publishes assets under a version-numbered path, so the newest version
-//! is read from versions.json rather than pinned — a pinned version stops
-//! receiving new champions after a patch.
+//! Data Dragon champion index and portrait cache. `cached()` reads from disk,
+//! `refresh()` updates in the background. Version comes from versions.json.
 
 use std::collections::HashMap;
 use std::fs;
@@ -18,8 +11,7 @@ use crate::config::{app_dir, atomic_write};
 
 const VERSIONS_URL: &str = "https://ddragon.leagueoflegends.com/api/versions.json";
 const TIMEOUT_SECS: u64 = 20;
-/// Portraits downloaded at once. Data Dragon is a CDN and tolerates this
-/// comfortably; it keeps a cold cache fill to a few seconds.
+/// Concurrent portrait downloads.
 const PORTRAIT_CONCURRENCY: usize = 12;
 
 pub fn champions_path() -> PathBuf {
@@ -34,11 +26,8 @@ fn manifest_path() -> PathBuf {
     app_dir().join("portraits.json")
 }
 
-/// Records which build of each portrait is on disk.
-///
-/// Data Dragon serves the ETag as the content MD5, so comparing it against the
-/// stored value detects a champion whose art was updated even though its name
-/// and id are unchanged -- a visual rework, which a file-exists check misses.
+/// ETag of each cached portrait. Data Dragon's ETag is the content MD5, so a
+/// changed ETag means changed art.
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct PortraitManifest {
     #[serde(default)]
@@ -54,9 +43,7 @@ fn load_manifest() -> PortraitManifest {
         .unwrap_or_default()
 }
 
-/// One champion, as the UI needs it: display name plus the asset id used to
-/// build the portrait filename. Storing the id removes any need for a
-/// name-to-id mapping table.
+/// Display name and Data Dragon asset id.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Champion {
     pub name: String,
@@ -71,8 +58,7 @@ pub struct ChampionData {
     pub champions: Vec<Champion>,
 }
 
-/// Whatever is on disk. Missing or corrupt cache yields an empty set, which the
-/// frontend seeds from the names already in the user's pools.
+/// Champion data from disk. Empty if the cache is missing or corrupt.
 pub fn cached() -> ChampionData {
     fs::read_to_string(champions_path())
         .ok()
@@ -132,11 +118,11 @@ async fn fetch_champions(client: &reqwest::Client, version: &str) -> Result<Vec<
     Ok(champions)
 }
 
-/// What revalidating one cached portrait concluded.
+/// Result of revalidating a cached portrait.
 enum Verdict {
     /// Cached copy is current.
     Keep,
-    /// Cached bytes look right; record the ETag so later checks are exact.
+    /// Cached bytes match. Record the ETag for later checks.
     Adopt(String),
     /// Art changed, or we cannot prove it did not.
     Refetch,
@@ -146,13 +132,8 @@ fn portrait_url(version: &str, id: &str) -> String {
     format!("https://ddragon.leagueoflegends.com/cdn/{version}/img/champion/{id}.png")
 }
 
-/// Fetch portraits that are missing or out of date.
-///
-/// Missing files are always fetched. When the Data Dragon version has moved on,
-/// every cached portrait is revalidated with a HEAD request and re-fetched only
-/// if its ETag changed, so a visual rework is picked up without re-downloading
-/// the whole set. While the version is unchanged nothing is requested at all --
-/// asset URLs are version-scoped and immutable.
+/// Download missing portraits. On a version change, HEAD-check cached ones and
+/// refetch any whose ETag changed.
 async fn sync_portraits(
     client: &reqwest::Client,
     version: &str,
@@ -187,7 +168,7 @@ async fn sync_portraits(
                     .unwrap_or(0);
                 async move {
                     let Ok(response) = client.head(&url).send().await else {
-                        // Offline: keep what is on disk rather than discarding it.
+                        // Offline. Keep the cached copy.
                         return Verdict::Keep;
                     };
                     let headers = response.headers();
@@ -202,9 +183,7 @@ async fn sync_portraits(
 
                     match (known, etag) {
                         (Some(known), Some(fresh)) if known == fresh => Verdict::Keep,
-                        // No stored ETag yet: adopt it without re-downloading
-                        // when the cached file is already the right size, so
-                        // upgrading does not refetch the whole set.
+                        // No stored ETag. Adopt it if the file size matches.
                         (None, Some(fresh)) if remote_len == Some(local_len) && local_len > 0 => {
                             Verdict::Adopt(fresh)
                         }
@@ -276,13 +255,12 @@ async fn sync_portraits(
 /// Outcome of a background refresh.
 pub struct RefreshOutcome {
     pub data: ChampionData,
-    /// True when the champion list or version changed, or portraits were added
-    /// — i.e. when the UI has something new to show.
+    /// True when the champion list, version, or portraits changed.
     pub changed: bool,
 }
 
-/// Fetch the newest version, champion list, and any missing portraits.
-/// Returns `Err` on network failure; callers treat that as "keep using cache".
+/// Fetch the newest version, champion list, and missing portraits. `Err` on
+/// network failure.
 pub async fn refresh() -> Result<RefreshOutcome, String> {
     let client = client()?;
     let version = latest_version(&client).await?;

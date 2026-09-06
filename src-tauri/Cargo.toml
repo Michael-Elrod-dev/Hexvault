@@ -17,7 +17,7 @@ tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-clipboard-manager = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# rustls rather than native-tls: no OpenSSL dependency, smaller binary.
+# rustls avoids the OpenSSL dependency.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 futures = "0.3"
 urlencoding = "2"

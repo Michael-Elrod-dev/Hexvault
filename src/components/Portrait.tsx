@@ -11,12 +11,8 @@ type Props = {
 };
 
 /**
- * Champion portrait, cache-first.
- *
- * Tries the locally cached PNG so the grid renders instantly and works offline,
- * and falls back to Data Dragon on the first run before the cache has filled.
- * Deliberately not lazy-loaded — the grid is short and lazy loading makes it
- * pop in while scrolling.
+ * Champion portrait. Local cache first, Data Dragon fallback. Not lazy-loaded
+ * because the grid is short.
  */
 export function Portrait({
   championId,
@@ -29,7 +25,7 @@ export function Portrait({
   const local = localPortrait(championId, portraitDir, version);
   const [src, setSrc] = useState(local ?? remotePortrait(championId, version));
 
-  // A new id (renamed champion, different search result) resets the cascade.
+  // Reset the source when the id changes.
   useEffect(() => {
     setSrc(localPortrait(championId, portraitDir, version) ?? remotePortrait(championId, version));
   }, [championId, portraitDir, version]);

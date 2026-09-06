@@ -78,10 +78,7 @@ export function rankColor(tier: string): string {
   return NEUTRAL;
 }
 
-/**
- * Everything the Riot client can return that is not an actual rank. These must
- * never be rendered as if they were a tier — see parseRank.
- */
+/** Non-rank strings the Riot client can return. See parseRank. */
 const NON_RANKS = new Set([
   "Unranked",
   "Account Not Found",
@@ -98,19 +95,15 @@ export type ParsedRank = {
   /** LP text, or "—" when there is none. */
   lp: string;
   color: string;
-  /** True when this represents a failure rather than a real rank. */
+  /** True for a failure message, false for a real rank. */
   isError: boolean;
 };
 
 const UNKNOWN: ParsedRank = { label: "—", lp: "—", color: NEUTRAL, isError: false };
 
 /**
- * Turn a cached rank string into display parts.
- *
- * The Rust client emits "Gold II • 45 LP" for ranked accounts, "Unranked" for
- * unranked ones, and a short message for failures. Failures collapse to a bare
- * "Error" so a stale value can never sit on screen looking current; the real
- * reason goes to a toast.
+ * Split a rank string like "Gold II • 45 LP" into display parts. Failures
+ * collapse to "Error".
  */
 export function parseRank(rank: string | undefined): ParsedRank {
   if (!rank) return UNKNOWN;

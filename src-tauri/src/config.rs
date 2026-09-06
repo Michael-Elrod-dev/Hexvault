@@ -1,12 +1,8 @@
-//! Config and rank-cache persistence.
-//!
-//! Everything lives in `%APPDATA%\Hexvault\` so it survives rebuilds and does
-//! not depend on the process working directory.
+//! Config and rank-cache persistence under `%APPDATA%\Hexvault\`.
 
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Once;
 
 use serde::{Deserialize, Serialize};
 
@@ -16,22 +12,7 @@ pub fn app_dir() -> PathBuf {
         .map(PathBuf::from)
         .or_else(|| dirs_home().map(|h| h.join(".config")))
         .unwrap_or_else(|| PathBuf::from("."));
-    let dir = base.join("Hexvault");
-
-    // The app shipped as LoL-Info before the rename. Carry that directory over
-    // once, so an upgrade does not silently orphan someone's accounts, cached
-    // ranks and portraits behind a name they no longer have a reason to look
-    // under. Only ever moves into a name that is not already taken, and a
-    // failed rename is not fatal: the app just starts empty at the new path.
-    static MIGRATED: Once = Once::new();
-    MIGRATED.call_once(|| {
-        let legacy = base.join("LoLinfo");
-        if legacy.is_dir() && !dir.exists() {
-            let _ = fs::rename(&legacy, &dir);
-        }
-    });
-
-    dir
+    base.join("Hexvault")
 }
 
 fn dirs_home() -> Option<PathBuf> {
@@ -48,8 +29,7 @@ pub fn rank_cache_path() -> PathBuf {
     app_dir().join("ranks.json")
 }
 
-/// Directories searched for a `.env`, nearest first: next to the executable,
-/// then the app data dir.
+/// Directories searched for `.env`. Exe dir, then cwd, then app data dir.
 fn env_search_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
@@ -91,9 +71,8 @@ fn read_dotenv(path: &Path) -> Option<String> {
     None
 }
 
-/// Riot API key, from the environment or a `.env`. Never read from or written
-/// to `config.json`, so no tracked file can contain it. The key stays in the
-/// Rust process and is never sent to the webview.
+/// Riot API key from the environment or a `.env`. Never stored in
+/// `config.json` or sent to the webview.
 pub fn resolve_api_key() -> String {
     if let Ok(key) = std::env::var("RIOT_API_KEY") {
         let key = key.trim().to_string();
@@ -219,10 +198,8 @@ fn default_pools() -> Vec<Pool> {
     .collect()
 }
 
-/// Write through a temp file in the same directory, then rename.
-///
-/// `fs::rename` is atomic on Windows for same-volume moves, so an interrupted
-/// write can never leave a truncated config behind.
+/// Write to a temp file in the same directory, then rename over the target.
+/// Same-volume rename is atomic on Windows.
 pub fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
     let parent = path.parent().ok_or_else(|| "config path has no parent".to_string())?;
     fs::create_dir_all(parent).map_err(|e| format!("creating {}: {e}", parent.display()))?;

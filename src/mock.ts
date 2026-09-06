@@ -1,12 +1,6 @@
 /**
- * Browser fallback for `npm run dev` outside Tauri.
- *
- * Lets the UI be opened in a normal browser to iterate on design (paste in a
- * Claude Design screen, tweak Tailwind, reload) without rebuilding Rust. Only
- * ever reachable when `import.meta.env.DEV` is true AND the Tauri IPC bridge is
- * absent, so it cannot ship in a release build or shadow the real backend.
- *
- * The data here is placeholder, deliberately not real credentials.
+ * Placeholder data for `npm run dev` outside Tauri. Only reachable when
+ * `import.meta.env.DEV` is true and the Tauri bridge is absent.
  */
 import type { Bootstrap, Config } from "./types";
 
@@ -62,7 +56,7 @@ export const mockBootstrap = (): Bootstrap => ({
   config: structuredClone(MOCK_CONFIG),
   ranks: { ...MOCK_RANKS },
   has_api_key: true,
-  // Browser dev has no disk cache; portraits fall back to the Data Dragon CDN.
+  // No disk cache in the browser. Portraits come from the CDN.
   champions: { version: "16.17.1", champions: MOCK_CHAMPIONS },
   portrait_dir: "",
 });

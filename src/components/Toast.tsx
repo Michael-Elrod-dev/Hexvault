@@ -1,9 +1,6 @@
 export type ToastState = { id: number; message: string } | null;
 
-/**
- * The app's only feedback channel — copies, saves, reorders, errors.
- * Kept mounted through the fade-out so the message does not vanish mid-animation.
- */
+/** Toast notification. Stays mounted through the fade-out. */
 export function Toast({ toast, visible }: { toast: ToastState; visible: boolean }) {
   if (!toast) return null;
 

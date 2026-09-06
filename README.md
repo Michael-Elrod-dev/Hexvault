@@ -1,9 +1,9 @@
 # Hexvault
 
-A desktop app for managing League of Legends accounts: click-to-copy
+A desktop app for managing League of Legends accounts. Click-to-copy
 credentials, live solo-queue ranks, and per-role champion pools.
 
-Tauri 2 (Rust) + React + Tailwind. Windows-focused; it renders in WebView2,
+Tauri 2 (Rust) + React + Tailwind. Windows-focused. It renders in WebView2,
 which ships with Windows 11.
 
 ## Running from source
@@ -15,7 +15,7 @@ npm run tauri dev
 ```
 
 Get an API key at <https://developer.riotgames.com/>. Development keys expire
-every 24 hours; a personal or production key lasts longer.
+every 24 hours. A personal or production key lasts longer.
 
 ## Building
 
@@ -32,20 +32,20 @@ no matter where it is launched from.
 
 ## Using it
 
-**Accounts.** Click any riot ID, account name, or password to copy it — the
+**Accounts.** Click any riot ID, account name, or password to copy it. The
 field flashes and a toast confirms. *Show passwords* unmasks them, *Edit*
 reveals per-card reorder / edit / delete controls, and *Add* creates one. Cards
 can also be dragged to reorder. Ranks render from cache immediately, then
 refresh in the background.
 
-A rank that fails to refresh shows `Error` rather than its cached value, with
-the reason in a toast, so a stale rank is never displayed as if it were current.
+A rank that fails to refresh shows `Error` instead of its cached value. The
+reason appears in a toast.
 
 **Champions.** Press `+` on a role, type, and pick from the dropdown. Free text
 cannot be submitted, so pool names always match Riot's spelling. The row closes
 when you pick or click away. Hover a portrait to remove that champion, drag a
 portrait to reorder it within its role, and use the arrows in each heading to
-reorder roles themselves. Dragging is confined to one role: a champion cannot
+reorder roles themselves. Dragging is confined to one role, so a champion cannot
 cross into another pool by accident.
 
 | Shortcut | Action |
@@ -73,7 +73,7 @@ to `config.json`.
 
 ## How it fits together
 
-Rust owns data and network; React is a pure view layer.
+Rust owns data and network. React is a pure view layer.
 
 ```
 src/
@@ -93,24 +93,24 @@ src-tauri/src/
 tools/screenshot.mjs      headless UI capture
 ```
 
-Riot API calls run in Rust because the API sends no CORS headers — a `fetch`
+Riot API calls run in Rust because the API sends no CORS headers, so a `fetch`
 from `tauri://localhost` would be blocked. Every account is looked up
 concurrently.
 
 Champion names, asset ids and portraits come from Riot's Data Dragon CDN. This
-is cache-first and never blocks startup: the cached copy renders immediately, a
+is cache-first and never blocks startup. The cached copy renders immediately, a
 background task refreshes at launch, and the UI redraws in place only when
 something actually changed. Everything is cached to disk, so the champion grid
-works offline. The Data Dragon version is read from `versions.json` rather than
-pinned, so a patch cannot orphan the assets.
+works offline. The Data Dragon version is read from `versions.json` at launch,
+so a patch cannot orphan the assets.
 
 Portrait freshness is tracked by ETag, which Data Dragon serves as the image's
-content hash. While the version is unchanged nothing is requested — asset URLs
-are version-scoped and immutable. When the version moves, each cached portrait
-is revalidated with a HEAD request and re-fetched only if its ETag changed, so
-a visual rework is picked up even though the champion's name and id stay the
-same. The version is also appended to the `asset://` URL, otherwise the webview
-would keep serving its cached copy of the old art.
+content hash. While the version is unchanged nothing is requested, since asset
+URLs are version-scoped and immutable. When the version moves, each cached
+portrait is revalidated with a HEAD request and re-fetched only if its ETag
+changed, so a visual rework is picked up even though the champion's name and id
+stay the same. The version is also appended to the `asset://` URL, otherwise the
+webview would keep serving its cached copy of the old art.
 
 ## Working on the UI
 
@@ -120,11 +120,11 @@ npm run shot       # renders the UI to screenshots/ via headless Edge
 ```
 
 Outside Tauri the frontend falls back to placeholder data (`src/mock.ts`), so
-the whole UI can be designed in a normal browser with hot reload — no Rust
+the whole UI can be designed in a normal browser with hot reload. No Rust
 rebuild, and no real credentials on screen.
 
 Anything that touches window controls, drag-and-drop, or the asset protocol
-must be verified in the built app; a plain browser has neither Tauri's
+must be verified in the built app. A plain browser has neither Tauri's
 permission system nor its OS integration, so those paths can pass in the
 browser and still fail in the window.
 

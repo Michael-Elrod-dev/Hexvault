@@ -2,11 +2,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "../mock";
 
 /**
- * Custom window chrome, replacing the OS titlebar (`decorations: false`).
- *
- * The bar itself carries `data-tauri-drag-region` so the window can be dragged
- * by it; the buttons must NOT inherit that attribute or clicking them would
- * start a drag instead of firing.
+ * Custom titlebar for `decorations: false`. The buttons must not carry
+ * `data-tauri-drag-region` or clicks start a drag.
  */
 export function TitleBar() {
   const controls = isTauri();

@@ -9,8 +9,7 @@ use std::collections::HashMap;
 use config::Config;
 use tauri::{Emitter, Manager};
 
-/// Everything the first paint needs, read from disk. No network here — the app
-/// must be usable before any request completes.
+/// Everything the first paint needs, read from disk. No network.
 #[derive(serde::Serialize)]
 pub struct Bootstrap {
     config: Config,
@@ -61,9 +60,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![bootstrap, save_config, fetch_ranks])
         .setup(|app| {
-            // Restore the saved window geometry. Sizes are clamped to the
-            // current monitor so a stale value from a larger or disconnected
-            // display cannot strand the window off-screen.
+            // Restore saved window geometry, clamped to the current monitor.
             if let Some(window) = app.get_webview_window("main") {
                 let saved = config::load().window;
                 if let Ok(Some(monitor)) = window.current_monitor() {
@@ -87,9 +84,7 @@ pub fn run() {
                 }
             }
 
-            // Champion data refresh, detached so it can never delay the window.
-            // Emits only when something actually changed, so the UI redraws on
-            // a new patch but stays still on the common no-op case.
+            // Background champion data refresh. Emits only when something changed.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 match ddragon::refresh().await {

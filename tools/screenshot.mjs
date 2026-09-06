@@ -1,9 +1,6 @@
 /**
- * Render the UI to PNGs using the installed Edge, without building Rust.
- *
- * Start the dev server first (`npm run dev`), then `npm run shot`. The frontend
- * falls back to mock data outside Tauri (see src/mock.ts), so this shows the
- * real layout with placeholder content.
+ * Render the UI to PNGs with the installed Edge. Run `npm run dev` first, then
+ * `npm run shot`. Uses the mock data from src/mock.ts.
  */
 import puppeteer from "puppeteer-core";
 import { mkdirSync } from "node:fs";
@@ -67,14 +64,13 @@ await page.screenshot({ path: `${OUT}/05-champions-wide.png` });
 await click("Champions");
 await settle(400);
 await page.evaluate(() => {
-  document.querySelectorAll("button")[0];
   const plus = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "+");
   plus?.click();
 });
 await settle(300);
 await type("input", "ka");
 await settle(400);
-await page.screenshot({ path: `${OUT}/07-picker.png` });
+await page.screenshot({ path: `${OUT}/06-picker.png` });
 await page.keyboard.press("Escape");
 await settle(200);
 
@@ -83,8 +79,8 @@ await click("Accounts");
 await settle();
 await click("Add");
 await settle(350);
-await page.screenshot({ path: `${OUT}/06-dialog.png` });
+await page.screenshot({ path: `${OUT}/07-dialog.png` });
 
 console.log(errors.length ? `page errors: ${errors.join("; ")}` : "no page errors");
-console.log(`wrote 6 screenshots to ${OUT}/`);
+console.log(`wrote 7 screenshots to ${OUT}/`);
 await browser.close();

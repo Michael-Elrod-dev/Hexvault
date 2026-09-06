@@ -3,17 +3,15 @@ import { isTauri } from "./mock";
 import type { Champion } from "./types";
 
 /**
- * Data Dragon ids for the handful of champions whose id is not simply the
- * display name with non-letters stripped. Only used when the champion index
- * has not loaded yet — once it has, the id comes from Riot directly and no
- * mapping is needed.
+ * Data Dragon ids that are not just the name with non-letters stripped. Only
+ * used before the champion index has loaded.
  */
 const SPECIAL_IDS: Record<string, string> = {
   "Bel'Veth": "Belveth",
   "Cho'Gath": "Chogath",
   "Kai'Sa": "Kaisa",
   "Kha'Zix": "Khazix",
-  // Stripping non-letters yields "Ksante", which 403s; the id keeps the capital S.
+  // Stripping non-letters gives "Ksante", which 403s.
   "K'Sante": "KSante",
   "K'sante": "KSante",
   LeBlanc: "Leblanc",
@@ -36,11 +34,8 @@ export function idFor(name: string, index: Champion[]): string {
 }
 
 /**
- * Local cached portrait, readable by the webview through the asset protocol.
- *
- * The Data Dragon version is appended as a query so that a portrait replaced on
- * disk after a visual rework gets a distinct URL; without it the webview can
- * keep serving its cached copy of the old art indefinitely.
+ * Cached portrait via the asset protocol. The version query busts the webview
+ * cache when art changes.
  */
 export function localPortrait(
   id: string,

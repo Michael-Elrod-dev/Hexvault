@@ -1,10 +1,5 @@
-//! Riot API client.
-//!
-//! Lives in Rust rather than the webview for two reasons: the Riot API sends no
-//! CORS headers, so a `fetch` from `tauri://localhost` would be blocked; and the
-//! API key never has to cross into JavaScript.
-//!
-//! All accounts are looked up concurrently.
+//! Riot API client. Runs in Rust so the API key never reaches the webview and
+//! CORS does not apply. All accounts are looked up concurrently.
 
 use std::collections::HashMap;
 

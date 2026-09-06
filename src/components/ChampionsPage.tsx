@@ -51,7 +51,7 @@ export function ChampionsPage(props: Props) {
                 <h2 className="font-mono text-[11px] font-semibold tracking-[0.16em] text-ink uppercase">
                   {pool.role}
                 </h2>
-                {/* Deliberately bright: this rule is what separates the roles. */}
+                {/* Brighter than the other rules on purpose. */}
                 <div className="h-px flex-1 bg-muted-2" />
                 <button
                   className="role-btn press"
@@ -103,17 +103,14 @@ export function ChampionsPage(props: Props) {
                     dragChamp?.role === pool.role && dragChamp.index === championIndex;
                   return (
                     <div
-                      /* Keyed by identity, not position. An index-based key makes
-                         React remount every tile on reorder, which aborts the
-                         in-flight drag. */
+                      /* Index keys remount every tile on reorder and abort the drag. */
                       key={key}
                       className="flex flex-col gap-[5px]"
                       onMouseEnter={() => onHoverChamp(key)}
                       onMouseLeave={() => onHoverChamp(null)}
                       draggable
                       onDragStart={(e) => {
-                        /* Chromium cancels the drag outright if dragstart sets no
-                           data, so no dragover ever fires and nothing can reorder. */
+                        /* Chromium cancels the drag if dragstart sets no data. */
                         e.dataTransfer.setData("text/plain", name);
                         e.dataTransfer.effectAllowed = "move";
                         onChampDragStart(pool.role, championIndex);
@@ -199,9 +196,8 @@ function AddRow({
   const wrapper = useRef<HTMLDivElement>(null);
   useEffect(() => input.current?.focus(), []);
 
-  /* Clicking anywhere outside closes the row, so there is no Cancel button.
-     The role's own + toggle is excluded, otherwise it would close here and
-     immediately reopen from its own onClick. */
+  /* Click outside closes the row. Skip the role's own + toggle so it does not
+     close and reopen in one click. */
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as HTMLElement | null;
@@ -216,8 +212,7 @@ function AddRow({
 
   const querying = draft.trim().length > 0;
 
-  /* Free text can never be submitted: Enter only ever commits a champion that
-     came from the index, which keeps pool names canonical. */
+  /* Enter only commits a champion from the index, never free text. */
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();

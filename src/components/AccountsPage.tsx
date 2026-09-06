@@ -75,8 +75,7 @@ export function AccountsPage(props: Props) {
           const pwKey = `pw-${index}`;
           return (
             <div
-              /* Keyed by identity, not position. An index-based key makes React
-                 remount every card on reorder, which aborts the in-flight drag. */
+              /* Index keys remount every card on reorder and abort the drag. */
               key={accountKey(account)}
               className="card-in flex-none rounded-xl px-4 py-3.5 transition-[background-color,border-color,box-shadow] duration-150"
               style={{
@@ -86,8 +85,7 @@ export function AccountsPage(props: Props) {
               }}
               draggable
               onDragStart={(e) => {
-                /* Chromium cancels the drag outright if dragstart sets no data,
-                   so no dragover ever fires and nothing can reorder. */
+                /* Chromium cancels the drag if dragstart sets no data. */
                 e.dataTransfer.setData("text/plain", String(index));
                 e.dataTransfer.effectAllowed = "move";
                 onDragStart(index);

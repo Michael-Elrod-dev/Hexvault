@@ -17,8 +17,7 @@ export function AccountDialog({ account, onSave, onCancel }: Props) {
 
   useEffect(() => firstField.current?.focus(), []);
 
-  // Escape is handled globally in App so it can also cancel a pending delete
-  // or an open add row; nothing to bind here.
+  // Escape is handled globally in App.
 
   const set = (patch: Partial<Account>) => {
     setDraft((d) => ({ ...d, ...patch }));
