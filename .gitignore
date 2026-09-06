@@ -1,0 +1,18 @@
+# Secrets - never commit
+.env
+
+# Legacy CustomTkinter app: contains plaintext credentials, kept locally for rollback only
+legacy/
+
+# Build artifacts (the old exe has credentials compiled into it)
+build/
+dist/
+*.pyc
+__pycache__/
+
+# IDE
+.idea/
+.vscode/
+
+# Local data (also lives in %APPDATA%\LoLinfo, never here)
+data/
