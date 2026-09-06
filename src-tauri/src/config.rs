@@ -204,7 +204,8 @@ fn default_pools() -> Vec<Pool> {
 }
 
 /// Write to a temp file in the same directory, then rename over the target.
-/// Same-volume rename is atomic on Windows.
+/// Same-volume rename is atomic on Windows. The temp file never outlives a
+/// failure.
 pub fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
     let parent = path.parent().ok_or_else(|| "config path has no parent".to_string())?;
     fs::create_dir_all(parent).map_err(|e| format!("creating {}: {e}", parent.display()))?;
@@ -213,15 +214,33 @@ pub fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
         ".{}.tmp",
         path.file_name().and_then(|n| n.to_str()).unwrap_or("config")
     ));
-    {
-        let mut file = fs::File::create(&tmp).map_err(|e| format!("creating temp file: {e}"))?;
-        file.write_all(contents.as_bytes()).map_err(|e| format!("writing temp file: {e}"))?;
-        file.sync_all().map_err(|e| format!("syncing temp file: {e}"))?;
-    }
-    fs::rename(&tmp, path).map_err(|e| {
+
+    let write = || -> Result<(), String> {
+        {
+            let mut file = fs::File::create(&tmp).map_err(|e| format!("creating temp file: {e}"))?;
+            file.write_all(contents.as_bytes()).map_err(|e| format!("writing temp file: {e}"))?;
+            file.sync_all().map_err(|e| format!("syncing temp file: {e}"))?;
+        }
+        fs::rename(&tmp, path).map_err(|e| format!("replacing {}: {e}", path.display()))
+    };
+
+    let result = write();
+    if result.is_err() {
         let _ = fs::remove_file(&tmp);
-        format!("replacing {}: {e}", path.display())
-    })
+    }
+    result
+}
+
+/// Move a file aside under a timestamped name and return where it went. `None`
+/// when the rename fails.
+pub fn quarantine(path: &Path) -> Option<PathBuf> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("config.json");
+    let kept = path.with_file_name(format!("{name}.unreadable-{stamp}"));
+    fs::rename(path, &kept).ok().map(|()| kept)
 }
 
 /// An account as it sits on disk. Credentials are base64 DPAPI blobs, the riot
@@ -311,8 +330,6 @@ pub fn load_from(path: &Path) -> Result<Loaded, LoadError> {
 /// Encrypt the credentials and write the file. A failure to encrypt aborts the
 /// save rather than writing plaintext.
 pub fn save_to(path: &Path, config: &Config, keep_backup: bool) -> Result<(), String> {
-    let _ = keep_backup;
-
     let mut accounts = Vec::with_capacity(config.accounts.len());
     for account in &config.accounts {
         accounts.push(StoredAccount {
@@ -331,6 +348,11 @@ pub fn save_to(path: &Path, config: &Config, keep_backup: bool) -> Result<(), St
         champion_pools: config.champion_pools.clone(),
     };
     let json = serde_json::to_string_pretty(&stored).map_err(|e| format!("serializing: {e}"))?;
+
+    // Keep the previous file. A failed copy must not block the save.
+    if keep_backup && path.exists() {
+        let _ = fs::copy(path, path.with_extension("json.bak"));
+    }
     atomic_write(path, &json)
 }
 
@@ -459,6 +481,32 @@ mod tests {
         assert!(load_from(&path).is_err());
     }
 
+    #[test]
+    fn quarantine_moves_the_file_aside() {
+        let temp = Temp::new("quarantine");
+        let path = temp.join("config.json");
+        fs::write(&path, "broken").unwrap();
+
+        let kept = quarantine(&path).unwrap();
+        assert!(!path.exists());
+        assert!(kept.exists());
+        assert_eq!(fs::read_to_string(&kept).unwrap(), "broken");
+        assert!(kept.file_name().unwrap().to_string_lossy().starts_with("config.json.unreadable-"));
+    }
+
+    #[test]
+    fn a_failed_write_leaves_no_temp_file() {
+        let temp = Temp::new("failed-write");
+        // A non-empty directory in the target's place. The rename cannot
+        // replace it, so the write fails after the temp file exists.
+        let path = temp.join("config.json");
+        fs::create_dir_all(&path).unwrap();
+        fs::write(path.join("occupied"), "x").unwrap();
+
+        assert!(atomic_write(&path, "{}").is_err());
+        assert!(!temp.join(".config.json.tmp").exists());
+    }
+
     #[cfg(windows)]
     #[test]
     fn save_round_trips_without_writing_plaintext() {
@@ -479,5 +527,32 @@ mod tests {
         assert!(!loaded.migrated_from_v1);
         assert_eq!(loaded.config.accounts[0].login, login);
         assert_eq!(loaded.config.accounts[0].password, password);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn saving_keeps_one_previous_version() {
+        let temp = Temp::new("backup");
+        let path = temp.join("config.json");
+        let bak = temp.join("config.json.bak");
+
+        save_to(&path, &sample("first", "pw1"), true).unwrap();
+        assert!(!bak.exists());
+        let first = fs::read_to_string(&path).unwrap();
+
+        save_to(&path, &sample("second", "pw2"), true).unwrap();
+        assert_eq!(fs::read_to_string(&bak).unwrap(), first);
+        assert_eq!(load_from(&path).ok().unwrap().config.accounts[0].login, "second");
+        assert_eq!(load_from(&bak).ok().unwrap().config.accounts[0].login, "first");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_migration_save_writes_no_backup() {
+        let temp = Temp::new("no-backup");
+        let path = temp.join("config.json");
+        save_to(&path, &sample("first", "pw1"), true).unwrap();
+        save_to(&path, &sample("second", "pw2"), false).unwrap();
+        assert!(!temp.join("config.json.bak").exists());
     }
 }

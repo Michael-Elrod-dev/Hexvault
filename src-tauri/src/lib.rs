@@ -39,18 +39,13 @@ fn read_config() -> (Config, Option<String>) {
         }
         Ok(loaded) => (loaded.config, None),
         Err(config::LoadError::Unreadable(reason)) => {
-            let stamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            let kept = path.with_extension(format!("json.unreadable-{stamp}"));
-            let warning = match std::fs::rename(&path, &kept) {
-                Ok(()) => format!(
+            let warning = match config::quarantine(&path) {
+                Some(kept) => format!(
                     "Saved accounts could not be read ({reason}). The file was kept as {}.",
                     kept.file_name().unwrap_or_default().to_string_lossy()
                 ),
-                Err(e) => format!(
-                    "Saved accounts could not be read ({reason}). Keeping the old file failed: {e}"
+                None => format!(
+                    "Saved accounts could not be read ({reason}). Keeping the old file failed."
                 ),
             };
             (Config::default(), Some(warning))
