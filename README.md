@@ -60,18 +60,21 @@ CORS headers — a `fetch` from `tauri://localhost` would be blocked.
 
 ## Using it
 
-**Accounts.** Click any riot ID, account name, or password to copy it.
-*Show Passwords* unmasks, *Edit* reveals reorder / edit / delete controls,
-*+ Add* creates one. Ranks load from cache instantly, then refresh in the
-background.
+**Accounts.** Click any riot ID, account name, or password to copy it — the
+field flashes and a toast confirms. *Show passwords* unmasks, *Edit* reveals
+reorder / edit / delete controls, *Add* creates one. Cards are also drag-
+reorderable. Ranks load from cache instantly, then refresh in the background.
 
-**Champions.** Type a champion and press Enter to add it to a role; click the
-`✕` on a chip to remove it. Changes save automatically after a short pause.
+**Champions.** Press `+` on a role, type, and pick from the dropdown — free
+text can't be submitted, so pool names always match Riot's spelling. Hover a
+portrait to remove it. Roles reorder with the arrows in each heading.
 
 | Shortcut | Action |
 |---|---|
 | `Ctrl+R` | Refresh ranks |
 | `Ctrl+S` | Save now |
+| `Esc` | Close dialog / cancel delete / close add row |
+| `↑` `↓` `⏎` | Navigate and pick in the champion picker |
 
 ## Layout
 
@@ -79,16 +82,33 @@ background.
 src/
   App.tsx                 state, persistence, shortcuts
   api.ts                  Tauri command bridge (mock fallback in browser dev)
-  types.ts                shared types, rank colours, account keys
+  types.ts                shared types, rank parsing, tier colours
+  champions.ts            portrait URLs, asset ids, picker search
   mock.ts                 placeholder data for browser dev only
   styles.css              Tailwind v4 + design tokens
-  components/             AccountsPage, ChampionsPage, AccountDialog, Toast
+  components/             AccountsPage, ChampionsPage, AccountDialog,
+                          Portrait, Toast
 src-tauri/src/
   config.rs               config + rank cache, .env resolution, atomic writes
   riot.rs                 concurrent Riot API client
+  ddragon.rs              champion index + portrait cache, background refresh
   lib.rs                  Tauri commands
 tools/screenshot.mjs      headless UI capture
 ```
+
+## Champion data
+
+Names, asset ids and portraits come from Riot's Data Dragon CDN. The app is
+cache-first and never blocks on it: the cached copy renders immediately, a
+background task refreshes at launch, and the UI redraws in place only if
+something actually changed — new champions after a patch, say. Everything is
+cached to disk, so the grid works offline.
+
+Portraits reach the webview through Tauri's asset protocol. Note that the
+`$APPDATA` scope variable resolves to `%APPDATA%\<bundle identifier>`, **not**
+this app's `%APPDATA%\LoLinfo`, so `tauri.conf.json` uses an explicit absolute
+scope pattern. Getting that wrong fails silently — portraits quietly fall back
+to the network and only break once you're offline.
 
 ## History
 

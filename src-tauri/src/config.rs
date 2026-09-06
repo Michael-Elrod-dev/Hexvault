@@ -102,8 +102,6 @@ pub struct Account {
     pub login: String,
     #[serde(default)]
     pub password: String,
-    #[serde(default)]
-    pub role: Option<String>,
 }
 
 impl Account {
@@ -210,7 +208,7 @@ fn default_pools() -> Vec<Pool> {
 ///
 /// `fs::rename` is atomic on Windows for same-volume moves, so an interrupted
 /// write can never leave a truncated config behind.
-fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
+pub fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
     let parent = path.parent().ok_or_else(|| "config path has no parent".to_string())?;
     fs::create_dir_all(parent).map_err(|e| format!("creating {}: {e}", parent.display()))?;
 

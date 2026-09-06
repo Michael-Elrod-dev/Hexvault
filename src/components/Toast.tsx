@@ -1,27 +1,31 @@
-import { useEffect, useState } from "react";
-
 export type ToastState = { id: number; message: string } | null;
 
-export function Toast({ toast }: { toast: ToastState }) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!toast) return;
-    setVisible(true);
-    const timer = setTimeout(() => setVisible(false), 1600);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
+/**
+ * The app's only feedback channel — copies, saves, reorders, errors.
+ * Kept mounted through the fade-out so the message does not vanish mid-animation.
+ */
+export function Toast({ toast, visible }: { toast: ToastState; visible: boolean }) {
   if (!toast) return null;
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-6 flex justify-center transition-opacity duration-150"
-      style={{ opacity: visible ? 1 : 0 }}
+      className="pointer-events-none absolute right-0 bottom-[22px] left-0 flex justify-center transition-[opacity,transform] duration-200"
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(8px)",
+        transitionTimingFunction: "cubic-bezier(.2,.7,.3,1)",
+      }}
     >
-      <div className="flex items-center gap-2 rounded-[10px] border border-ok/60 bg-[#1e3a1e] px-4 py-2.5 shadow-lg">
-        <span className="text-ok text-sm font-bold">✓</span>
-        <span className="text-xs font-semibold">{toast.message}</span>
+      <div
+        className="flex items-center gap-2.5 rounded-[10px] px-[15px] py-2.5"
+        style={{
+          background: "var(--color-field-hi)",
+          border: "1px solid rgba(200,111,75,.45)",
+          boxShadow: "0 14px 30px rgba(0,0,0,.5)",
+        }}
+      >
+        <span className="text-[13px] text-accent">✓</span>
+        <span className="text-[12.5px] font-medium text-ink">{toast.message}</span>
       </div>
     </div>
   );

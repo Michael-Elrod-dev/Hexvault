@@ -18,12 +18,12 @@ const MOCK_CONFIG: Config = {
   window: { width: 520, height: 900, x: null, y: null },
   passwords_visible: false,
   accounts: [
-    { riot_name: "ExampleOne", tag: "NA1", login: "example_login_1", password: "hunter2", role: null },
-    { riot_name: "ExampleTwo", tag: "NA1", login: "example_login_2", password: "hunter2", role: "ADC" },
-    { riot_name: "Example Three", tag: "NA1", login: "example_login_3", password: "hunter2", role: "MID" },
-    { riot_name: "ExampleFour", tag: "EUW", login: "example_login_4", password: "hunter2", role: "SUP" },
-    { riot_name: "ExampleFive", tag: "NA1", login: "example_login_5", password: "hunter2", role: "TOP" },
-    { riot_name: "Example Six", tag: "NA1", login: "example_login_6", password: "hunter2", role: "JG" },
+    { riot_name: "ExampleOne", tag: "NA1", login: "example_login_1", password: "hunter2" },
+    { riot_name: "ExampleTwo", tag: "NA1", login: "example_login_2", password: "hunter2" },
+    { riot_name: "Example Three", tag: "NA1", login: "example_login_3", password: "hunter2" },
+    { riot_name: "ExampleFour", tag: "EUW", login: "example_login_4", password: "hunter2" },
+    { riot_name: "ExampleFive", tag: "NA1", login: "example_login_5", password: "hunter2" },
+    { riot_name: "Example Six", tag: "NA1", login: "example_login_6", password: "hunter2" },
   ],
   champion_pools: [
     {
@@ -54,10 +54,17 @@ const MOCK_RANKS: Record<string, string> = {
   "example six#na1": "Silver I • 30 LP",
 };
 
+const MOCK_CHAMPIONS = [...new Set(MOCK_CONFIG.champion_pools.flatMap((p) => p.champions))]
+  .sort()
+  .map((name) => ({ name, id: name.replace(/[^A-Za-z]/g, "") }));
+
 export const mockBootstrap = (): Bootstrap => ({
   config: structuredClone(MOCK_CONFIG),
   ranks: { ...MOCK_RANKS },
   has_api_key: true,
+  // Browser dev has no disk cache; portraits fall back to the Data Dragon CDN.
+  champions: { version: "16.17.1", champions: MOCK_CHAMPIONS },
+  portrait_dir: "",
 });
 
 export const mockRanks = () => ({ ...MOCK_RANKS });

@@ -1,5 +1,5 @@
 import type { Account } from "../types";
-import { accountKey, rankColor, riotId, stripLp } from "../types";
+import { accountKey, parseRank, riotId } from "../types";
 
 type Props = {
   accounts: Account[];
@@ -7,126 +7,207 @@ type Props = {
   passwordsVisible: boolean;
   editing: boolean;
   refreshing: boolean;
+  copied: string | null;
+  pendingDelete: number | null;
+  dragIndex: number | null;
   onTogglePasswords: () => void;
   onToggleEditing: () => void;
-  onCopy: (text: string) => void;
+  onCopy: (text: string, key: string, message: string) => void;
   onRefresh: () => void;
   onAdd: () => void;
   onEdit: (index: number) => void;
-  onDelete: (index: number) => void;
+  onAskDelete: (index: number) => void;
+  onCancelDelete: () => void;
+  onConfirmDelete: (index: number) => void;
   onMove: (index: number, delta: number) => void;
+  onDragStart: (index: number) => void;
+  onDragOver: (index: number) => void;
+  onDragEnd: () => void;
 };
+
+const MASK = "•".repeat(10);
 
 export function AccountsPage(props: Props) {
   const {
-    accounts, ranks, passwordsVisible, editing, refreshing,
-    onTogglePasswords, onToggleEditing, onCopy, onRefresh, onAdd,
-    onEdit, onDelete, onMove,
+    accounts, ranks, passwordsVisible, editing, refreshing, copied,
+    pendingDelete, dragIndex, onTogglePasswords, onToggleEditing, onCopy,
+    onRefresh, onAdd, onEdit, onAskDelete, onCancelDelete, onConfirmDelete,
+    onMove, onDragStart, onDragOver, onDragEnd,
   } = props;
 
   return (
-    <div className="flex h-full flex-col gap-3 p-4">
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <button className="btn btn-ghost" data-on={passwordsVisible} onClick={onTogglePasswords}>
-          {passwordsVisible ? "🙈 Hide Passwords" : "👁 Show Passwords"}
+    <div className="page-in flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-none items-center gap-2 px-5 pt-4 pb-3">
+        <div className="font-mono text-[10px] tracking-[0.12em] text-muted-2 uppercase">
+          {accounts.length} {accounts.length === 1 ? "account" : "accounts"}
+        </div>
+        <div className="flex-1" />
+        <button className="ghost press" data-on={passwordsVisible} onClick={onTogglePasswords}>
+          {passwordsVisible ? "Hide passwords" : "Show passwords"}
+        </button>
+        <button className="ghost press" data-on={editing} onClick={onToggleEditing}>
+          Edit
+        </button>
+        <button className="ghost press" onClick={onAdd}>
+          Add
         </button>
         <button
-          className="btn btn-ghost"
-          data-on={editing}
-          onClick={onToggleEditing}
-          title="Show reorder, edit and delete controls"
+          className="press flex items-center gap-1.5 rounded-md border border-[rgba(200,111,75,.35)] px-[9px] py-[5px] font-mono text-[11px] text-accent transition-colors hover:bg-[rgba(200,111,75,.14)] disabled:opacity-70"
+          onClick={onRefresh}
+          disabled={refreshing}
+          title="Refresh ranks"
         >
-          ✎ Edit
-        </button>
-        <button className="btn btn-ghost" onClick={onAdd}>
-          + Add
-        </button>
-        <div className="flex-1" />
-        <button className="btn" onClick={onRefresh} disabled={refreshing}>
-          {refreshing ? "Refreshing…" : "⟳ Refresh"}
+          <span className={refreshing ? "spin inline-block" : "inline-block"}>↻</span>
         </button>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pr-1">
+      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-5 pb-5">
         {accounts.length === 0 && (
-          <p className="mt-8 text-center text-muted">No accounts yet. Use + Add to create one.</p>
+          <p className="mt-10 text-center text-muted">No accounts yet. Use Add to create one.</p>
         )}
 
         {accounts.map((account, index) => {
-          const rank = ranks[accountKey(account)] ?? "…";
-          const shown = stripLp(rank);
+          const rank = parseRank(ranks[accountKey(account)]);
+          const dragging = dragIndex === index;
+          const loginKey = `login-${index}`;
+          const pwKey = `pw-${index}`;
           return (
-            <div key={`${accountKey(account)}-${index}`} className="card shrink-0 px-4 pt-3 pb-3.5">
-              <div className="flex items-center gap-1.5">
-                <button
-                  className="truncate text-base font-semibold hover:text-accent-hi"
-                  title="Click to copy"
-                  onClick={() => onCopy(riotId(account))}
-                >
-                  {riotId(account)}
-                </button>
-                {account.role && (
-                  <span className="shrink-0 text-muted">– {account.role}</span>
-                )}
+            <div
+              key={`${accountKey(account)}-${index}`}
+              className="card-in flex-none rounded-xl px-4 py-3.5 transition-[background-color,border-color,box-shadow] duration-150"
+              style={{
+                background: dragging ? "var(--color-surface-hi)" : "var(--color-surface)",
+                border: `1px solid ${dragging ? "var(--color-accent)" : "var(--color-line)"}`,
+                boxShadow: dragging ? "0 10px 24px rgba(0,0,0,.45)" : "none",
+              }}
+              draggable
+              onDragStart={() => onDragStart(index)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                onDragOver(index);
+              }}
+              onDragEnd={onDragEnd}
+            >
+              <div className="flex gap-3">
+                <div
+                  className="w-[3px] flex-none self-stretch rounded-sm"
+                  style={{ background: rank.color }}
+                />
 
-                <div className="flex-1" />
+                <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="group flex min-w-0 items-baseline gap-[7px] overflow-hidden whitespace-nowrap transition-colors hover:text-accent-hi"
+                      onClick={() =>
+                        onCopy(riotId(account), `riot-${index}`, `Copied ${riotId(account)}`)
+                      }
+                    >
+                      <span className="truncate text-[15px] font-medium tracking-[-0.005em]">
+                        {account.riot_name}
+                      </span>
+                      <span className="flex-none font-mono text-[11px] text-muted-2 transition-colors group-hover:text-accent-hi">
+                        #{account.tag}
+                      </span>
+                    </button>
 
-                <span
-                  className="shrink-0 text-xs font-bold"
-                  style={{ color: rankColor(shown) }}
-                  title={rank !== shown ? rank : undefined}
-                >
-                  {shown}
-                </span>
+                    <div className="flex-1" />
 
-                {editing && (
-                  <div className="ml-1.5 flex shrink-0 gap-1">
-                    <button
-                      className="btn btn-ghost btn-icon"
-                      title="Move up"
-                      disabled={index === 0}
-                      onClick={() => onMove(index, -1)}
+                    <div
+                      className="flex-none text-[13px] font-medium whitespace-nowrap"
+                      style={{ color: rank.color }}
                     >
-                      ↑
-                    </button>
-                    <button
-                      className="btn btn-ghost btn-icon"
-                      title="Move down"
-                      disabled={index === accounts.length - 1}
-                      onClick={() => onMove(index, 1)}
+                      {rank.label}
+                    </div>
+                    <div className="min-w-[50px] flex-none text-right font-mono text-[11px] text-muted-2">
+                      {rank.lp}
+                    </div>
+
+                    <div
+                      className="flex gap-1 overflow-hidden transition-[max-width,opacity,margin-left] duration-200 ease-[cubic-bezier(.2,.7,.3,1)]"
+                      style={{
+                        maxWidth: editing ? 128 : 0,
+                        opacity: editing ? 1 : 0,
+                        marginLeft: editing ? 6 : 0,
+                      }}
                     >
-                      ↓
-                    </button>
-                    <button
-                      className="btn btn-ghost btn-icon"
-                      title="Edit account"
-                      onClick={() => onEdit(index)}
-                    >
-                      ✎
-                    </button>
-                    <button
-                      className="btn btn-icon !bg-danger hover:!bg-[#f05a5f]"
-                      title="Delete account"
-                      onClick={() => onDelete(index)}
-                    >
-                      ✕
-                    </button>
+                      <button
+                        className="icon-btn press"
+                        disabled={index === 0}
+                        title="Move up"
+                        tabIndex={editing ? 0 : -1}
+                        onClick={() => onMove(index, -1)}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        className="icon-btn press"
+                        disabled={index === accounts.length - 1}
+                        title="Move down"
+                        tabIndex={editing ? 0 : -1}
+                        onClick={() => onMove(index, 1)}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        className="icon-btn press"
+                        title="Edit account"
+                        tabIndex={editing ? 0 : -1}
+                        onClick={() => onEdit(index)}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        className="icon-btn icon-btn-danger press"
+                        title="Delete account"
+                        tabIndex={editing ? 0 : -1}
+                        onClick={() => onAskDelete(index)}
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
-                )}
+
+                  <div className="flex gap-2">
+                    <CopyField
+                      caption="ID"
+                      value={account.login || "—"}
+                      flashing={copied === loginKey}
+                      onClick={() => onCopy(account.login, loginKey, "Copied account name")}
+                    />
+                    <CopyField
+                      caption="PW"
+                      value={passwordsVisible ? account.password : MASK}
+                      flashing={copied === pwKey}
+                      onClick={() => onCopy(account.password, pwKey, "Copied password")}
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="mt-2.5 flex gap-2.5">
-                <Field
-                  caption="Account name"
-                  value={account.login}
-                  onCopy={() => onCopy(account.login)}
-                />
-                <Field
-                  caption="Password"
-                  value={passwordsVisible ? account.password : "••••••••"}
-                  onCopy={() => onCopy(account.password)}
-                />
-              </div>
+              {pendingDelete === index && (
+                <div
+                  className="fade-in mt-3 flex items-center gap-2.5 rounded-lg px-[11px] py-[9px]"
+                  style={{
+                    background: "rgba(200,85,70,.10)",
+                    border: "1px solid rgba(200,85,70,.35)",
+                  }}
+                >
+                  <div className="text-xs text-danger-ink">Remove this account from the app?</div>
+                  <div className="flex-1" />
+                  <button
+                    className="press rounded-md border border-line-hi px-[9px] py-1 text-xs text-muted transition-colors hover:border-line-hover hover:text-ink"
+                    onClick={onCancelDelete}
+                  >
+                    Keep
+                  </button>
+                  <button
+                    className="press rounded-md bg-danger px-2.5 py-[5px] text-xs font-medium text-[#0E0D0B] transition-colors hover:bg-danger-hi"
+                    onClick={() => onConfirmDelete(index)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -135,23 +216,23 @@ export function AccountsPage(props: Props) {
   );
 }
 
-function Field({
+function CopyField({
   caption,
   value,
-  onCopy,
+  flashing,
+  onClick,
 }: {
   caption: string;
   value: string;
-  onCopy: () => void;
+  flashing: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1">
-      <span className="text-[10px] font-semibold tracking-wide text-muted uppercase">
+    <button className="copy-field press" data-flash={flashing} onClick={onClick} title="Click to copy">
+      <span className="flex-none font-mono text-[10px] tracking-[0.1em] text-muted-2">
         {caption}
       </span>
-      <button className="value" title="Click to copy" onClick={onCopy}>
-        {value}
-      </button>
-    </div>
+      <span className="truncate font-mono text-xs text-ink-dim">{value}</span>
+    </button>
   );
 }

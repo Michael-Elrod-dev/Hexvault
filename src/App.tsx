@@ -1,35 +1,68 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 
 import * as api from "./api";
-import type { Account, Config } from "./types";
-import { accountKey } from "./types";
+import type { Account, Champion, ChampionData, Config } from "./types";
+import { accountKey, parseRank } from "./types";
 import { isTauri } from "./mock";
+import { guessId } from "./champions";
 import { AccountsPage } from "./components/AccountsPage";
 import { ChampionsPage } from "./components/ChampionsPage";
 import { AccountDialog } from "./components/AccountDialog";
 import { Toast, type ToastState } from "./components/Toast";
 
 const SAVE_DEBOUNCE_MS = 800;
+const TOAST_HOLD_MS = 1700;
+const FLASH_MS = 200;
 
 type DialogState = { open: false } | { open: true; index: number | null };
+
+/** Seed the picker from the user's own pools so it works before the index loads. */
+function seedIndex(config: Config): Champion[] {
+  const names = [...new Set(config.champion_pools.flatMap((p) => p.champions))];
+  return names.sort().map((name) => ({ name, id: guessId(name) }));
+}
 
 export default function App() {
   const [config, setConfig] = useState<Config | null>(null);
   const [ranks, setRanks] = useState<Record<string, string>>({});
+  const [champions, setChampions] = useState<ChampionData>({ version: "", champions: [] });
+  const [portraitDir, setPortraitDir] = useState("");
   const [tab, setTab] = useState<"accounts" | "champions">("accounts");
+
   const [editing, setEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState("");
-  const [toast, setToast] = useState<ToastState>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<number | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dialog, setDialog] = useState<DialogState>({ open: false });
 
+  const [addingRole, setAddingRole] = useState<string | null>(null);
+  const [addDraft, setAddDraft] = useState("");
+  const [addHighlight, setAddHighlight] = useState(0);
+  const [hoverChamp, setHoverChamp] = useState<string | null>(null);
+
+  const [toast, setToast] = useState<ToastState>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+
   const saveTimer = useRef<number | null>(null);
+  const flashTimer = useRef<number | null>(null);
+  const toastTimers = useRef<number[]>([]);
   const latest = useRef<Config | null>(null);
   latest.current = config;
 
+  /* ---------- toast ---------- */
+
   const notify = useCallback((message: string) => {
+    toastTimers.current.forEach(clearTimeout);
+    toastTimers.current = [];
     setToast({ id: Date.now(), message });
+    setToastVisible(true);
+    toastTimers.current.push(
+      window.setTimeout(() => setToastVisible(false), TOAST_HOLD_MS),
+      window.setTimeout(() => setToast(null), TOAST_HOLD_MS + 260),
+    );
   }, []);
 
   /* ---------- persistence ---------- */
@@ -42,30 +75,23 @@ export default function App() {
     const current = latest.current;
     if (!current) return;
     try {
-      // Window geometry is only available under Tauri; in browser dev mode the
-      // stored size is left untouched.
-      let withWindow = current;
+      let payload = current;
       if (isTauri()) {
         const { width, height } = await getCurrentWindow().outerSize();
         const position = await getCurrentWindow().outerPosition();
-        withWindow = { ...current, window: { width, height, x: position.x, y: position.y } };
+        payload = { ...current, window: { width, height, x: position.x, y: position.y } };
       }
-      await api.saveConfig(withWindow);
-      setSaving("Saved ✓");
-      setTimeout(() => setSaving(""), 1500);
+      await api.saveConfig(payload);
     } catch (e) {
-      setSaving("");
       notify(`Save failed: ${e}`);
     }
   }, [notify]);
 
   const scheduleSave = useCallback(() => {
-    setSaving("Saving…");
     if (saveTimer.current !== null) clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => void saveNow(), SAVE_DEBOUNCE_MS);
   }, [saveNow]);
 
-  /** Apply a change to config and schedule a save. */
   const mutate = useCallback(
     (fn: (draft: Config) => Config) => {
       setConfig((current) => {
@@ -81,18 +107,48 @@ export default function App() {
 
   /* ---------- ranks ---------- */
 
-  const refresh = useCallback(async (accounts: Account[]) => {
-    if (accounts.length === 0) return;
-    setRefreshing(true);
-    try {
-      const fresh = await api.fetchRanks(accounts);
-      setRanks((prev) => ({ ...prev, ...fresh }));
-    } catch (e) {
-      notify(String(e));
-    } finally {
-      setRefreshing(false);
-    }
-  }, [notify]);
+  /**
+   * A rank we could not confirm must never keep showing its cached value —
+   * that would look current when it is not. On any failure the affected
+   * accounts are marked so the card renders "Error"; the reason goes to a toast.
+   */
+  const refresh = useCallback(
+    async (accounts: Account[], quiet = false) => {
+      if (accounts.length === 0) return;
+      setRefreshing(true);
+      try {
+        const fresh = await api.fetchRanks(accounts);
+        setRanks((prev) => ({ ...prev, ...fresh }));
+
+        const failed = accounts.filter((a) => {
+          const value = fresh[accountKey(a)];
+          return !value || parseRank(value).isError;
+        });
+        if (failed.length > 0) {
+          const reason = fresh[accountKey(failed[0])] ?? "no response";
+          notify(
+            failed.length === 1
+              ? `${failed[0].riot_name}: ${reason}`
+              : `${failed.length} accounts failed to refresh — ${reason}`,
+          );
+        } else if (!quiet) {
+          notify("Ranks up to date");
+        }
+      } catch (e) {
+        // Whole-request failure: mark every requested account so no stale value
+        // is left on screen pretending to be current.
+        setRanks((prev) => {
+          const next = { ...prev };
+          for (const a of accounts) next[accountKey(a)] = "Connection Error";
+          return next;
+        });
+        notify(String(e).replace(/^Error:\s*/, ""));
+      } finally {
+        setRefreshing(false);
+      }
+    },
+    [notify],
+  );
 
   /* ---------- startup ---------- */
 
@@ -104,18 +160,69 @@ export default function App() {
       setConfig(boot.config);
       latest.current = boot.config;
       setRanks(boot.ranks);
-      // Paint from the cache first, then go to the network.
-      if (boot.has_api_key) void refresh(boot.config.accounts);
+      setPortraitDir(boot.portrait_dir);
+      setChampions(
+        boot.champions.champions.length > 0
+          ? boot.champions
+          : { version: boot.champions.version, champions: seedIndex(boot.config) },
+      );
+      if (boot.has_api_key) void refresh(boot.config.accounts, true);
     })();
     return () => {
       cancelled = true;
     };
   }, [refresh]);
 
+  // Champion data refreshes in the background at launch; when Riot has
+  // something new the UI redraws in place rather than needing a restart.
+  useEffect(() => {
+    if (!isTauri()) return;
+    const unlisten = listen<ChampionData>("champions-updated", (event) => {
+      if (event.payload?.champions?.length) setChampions(event.payload);
+    });
+    return () => {
+      void unlisten.then((f) => f());
+    };
+  }, []);
+
+  /**
+   * Snap stored pool names to Riot's canonical spelling.
+   *
+   * Names added before the picker existed were free text and can differ in
+   * case ("K'sante" vs "K'Sante"), which breaks portrait lookup and the
+   * already-in-pool check. Runs whenever the index changes, so it also repairs
+   * names Riot itself renames later.
+   */
+  useEffect(() => {
+    if (champions.champions.length === 0 || !latest.current) return;
+    const canonical = new Map(champions.champions.map((c) => [c.name.toLowerCase(), c.name]));
+    let changed = false;
+
+    const pools = latest.current.champion_pools.map((pool) => {
+      const fixed = pool.champions.map((name) => {
+        const proper = canonical.get(name.toLowerCase());
+        if (proper && proper !== name) {
+          changed = true;
+          return proper;
+        }
+        return name;
+      });
+      return changed ? { ...pool, champions: fixed } : pool;
+    });
+
+    if (changed) mutate((c) => ({ ...c, champion_pools: pools }));
+  }, [champions, mutate]);
+
   /* ---------- shortcuts and shutdown ---------- */
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDialog({ open: false });
+        setPendingDelete(null);
+        setAddingRole(null);
+        return;
+      }
       if (!e.ctrlKey) return;
       if (e.key === "r") {
         e.preventDefault();
@@ -129,9 +236,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [refresh, refreshing, saveNow]);
 
-  // Save on close. Tauri hands the close over to this handler and only destroys
-  // the window once it resolves, so the save is raced against a timeout: a hung
-  // or slow write must never leave the user unable to close the app.
   useEffect(() => {
     if (!isTauri()) return;
     const unlisten = getCurrentWindow().onCloseRequested(async () => {
@@ -145,8 +249,6 @@ export default function App() {
     };
   }, [saveNow]);
 
-  // Persist geometry as it changes, so window size survives even if the
-  // close-time save is skipped.
   useEffect(() => {
     if (!isTauri()) return;
     const unlisten = getCurrentWindow().onResized(() => scheduleSave());
@@ -155,32 +257,54 @@ export default function App() {
     };
   }, [scheduleSave]);
 
-  if (!config) {
-    return <div className="h-full" />;
-  }
+  useEffect(
+    () => () => {
+      toastTimers.current.forEach(clearTimeout);
+      if (flashTimer.current !== null) clearTimeout(flashTimer.current);
+      if (saveTimer.current !== null) clearTimeout(saveTimer.current);
+    },
+    [],
+  );
+
+  if (!config) return <div className="h-full" />;
 
   /* ---------- handlers ---------- */
 
-  const copy = async (text: string) => {
+  const copy = async (text: string, key: string, message: string) => {
     await api.copyText(text);
-    notify("Copied to clipboard");
+    setCopied(key);
+    if (flashTimer.current !== null) clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => setCopied(null), FLASH_MS);
+    notify(message);
   };
 
-  const moveAccount = (index: number, delta: number) =>
+  const moveAccount = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= config.accounts.length) return;
     mutate((c) => {
-      const target = index + delta;
-      if (target < 0 || target >= c.accounts.length) return c;
       const accounts = [...c.accounts];
       [accounts[index], accounts[target]] = [accounts[target], accounts[index]];
       return { ...c, accounts };
     });
+    notify("Order saved");
+  };
 
-  const deleteAccount = (index: number) => {
-    const account = config.accounts[index];
-    if (!confirm(`Delete ${account.riot_name}#${account.tag}?\n\nThis removes it from the app only.`)) {
-      return;
-    }
+  const reorderByDrag = (over: number) => {
+    if (dragIndex === null || dragIndex === over) return;
+    mutate((c) => {
+      const accounts = [...c.accounts];
+      const [moved] = accounts.splice(dragIndex, 1);
+      accounts.splice(over, 0, moved);
+      return { ...c, accounts };
+    });
+    setDragIndex(over);
+  };
+
+  const confirmDelete = (index: number) => {
+    const name = config.accounts[index].riot_name;
     mutate((c) => ({ ...c, accounts: c.accounts.filter((_, i) => i !== index) }));
+    setPendingDelete(null);
+    notify(`Deleted ${name}`);
   };
 
   const saveAccount = (account: Account) => {
@@ -190,7 +314,8 @@ export default function App() {
 
     if (index === null) {
       mutate((c) => ({ ...c, accounts: [...c.accounts, account] }));
-      void refresh([account]);
+      notify(`Added ${account.riot_name}`);
+      void refresh([account], true);
       return;
     }
     const previous = config.accounts[index];
@@ -198,66 +323,130 @@ export default function App() {
       ...c,
       accounts: c.accounts.map((a, i) => (i === index ? account : a)),
     }));
-    if (accountKey(previous) !== accountKey(account)) void refresh([account]);
+    notify(`Saved ${account.riot_name}`);
+    if (accountKey(previous) !== accountKey(account)) void refresh([account], true);
   };
 
-  const addChampion = (role: string, champion: string) =>
-    mutate((c) => ({
-      ...c,
-      champion_pools: c.champion_pools.map((p) => {
-        if (p.role !== role) return p;
-        const exists = p.champions.some((x) => x.toLowerCase() === champion.toLowerCase());
-        return exists ? p : { ...p, champions: [...p.champions, champion] };
-      }),
-    }));
-
-  const removeChampion = (role: string, champion: string) =>
+  const pickChampion = (role: string, champion: Champion) => {
+    const pool = config.champion_pools.find((p) => p.role === role);
+    if (pool?.champions.some((c) => c.toLowerCase() === champion.name.toLowerCase())) {
+      notify(`${champion.name} is already in ${role}`);
+      return;
+    }
     mutate((c) => ({
       ...c,
       champion_pools: c.champion_pools.map((p) =>
-        p.role === role ? { ...p, champions: p.champions.filter((x) => x !== champion) } : p,
+        p.role === role ? { ...p, champions: [...p.champions, champion.name] } : p,
       ),
     }));
+    setAddDraft("");
+    setAddHighlight(0);
+    notify(`Added ${champion.name} to ${role}`);
+  };
+
+  const removeChampion = (role: string, name: string) => {
+    mutate((c) => ({
+      ...c,
+      champion_pools: c.champion_pools.map((p) =>
+        p.role === role ? { ...p, champions: p.champions.filter((x) => x !== name) } : p,
+      ),
+    }));
+    setHoverChamp(null);
+    notify(`Removed ${name}`);
+  };
+
+  const moveRole = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= config.champion_pools.length) return;
+    mutate((c) => {
+      const pools = [...c.champion_pools];
+      [pools[index], pools[target]] = [pools[target], pools[index]];
+      return { ...c, champion_pools: pools };
+    });
+    notify("Order saved");
+  };
 
   return (
-    <div className="flex h-full flex-col p-2">
-      <div className="flex shrink-0 gap-1 px-2 pt-1">
+    <div className="relative flex h-full flex-col overflow-hidden">
+      <div className="flex flex-none gap-6 px-5 pt-[18px]">
         <button className="tab" data-active={tab === "accounts"} onClick={() => setTab("accounts")}>
           Accounts
         </button>
-        <button className="tab" data-active={tab === "champions"} onClick={() => setTab("champions")}>
+        <button
+          className="tab"
+          data-active={tab === "champions"}
+          onClick={() => setTab("champions")}
+        >
           Champions
         </button>
+        <div className="flex-1 border-b border-line-soft" />
       </div>
 
-      <div className="min-h-0 flex-1">
-        {tab === "accounts" ? (
-          <AccountsPage
-            accounts={config.accounts}
-            ranks={ranks}
-            passwordsVisible={config.passwords_visible}
-            editing={editing}
-            refreshing={refreshing}
-            onTogglePasswords={() =>
-              mutate((c) => ({ ...c, passwords_visible: !c.passwords_visible }))
-            }
-            onToggleEditing={() => setEditing((v) => !v)}
-            onCopy={copy}
-            onRefresh={() => void refresh(config.accounts)}
-            onAdd={() => setDialog({ open: true, index: null })}
-            onEdit={(index) => setDialog({ open: true, index })}
-            onDelete={deleteAccount}
-            onMove={moveAccount}
-          />
-        ) : (
-          <ChampionsPage
-            pools={config.champion_pools}
-            saving={saving}
-            onAdd={addChampion}
-            onRemove={removeChampion}
-          />
-        )}
-      </div>
+      {tab === "accounts" ? (
+        <AccountsPage
+          accounts={config.accounts}
+          ranks={ranks}
+          passwordsVisible={config.passwords_visible}
+          editing={editing}
+          refreshing={refreshing}
+          copied={copied}
+          pendingDelete={pendingDelete}
+          dragIndex={dragIndex}
+          onTogglePasswords={() =>
+            mutate((c) => ({ ...c, passwords_visible: !c.passwords_visible }))
+          }
+          onToggleEditing={() => {
+            setEditing((v) => !v);
+            setPendingDelete(null);
+          }}
+          onCopy={copy}
+          onRefresh={() => void refresh(config.accounts)}
+          onAdd={() => setDialog({ open: true, index: null })}
+          onEdit={(index) => setDialog({ open: true, index })}
+          onAskDelete={setPendingDelete}
+          onCancelDelete={() => setPendingDelete(null)}
+          onConfirmDelete={confirmDelete}
+          onMove={moveAccount}
+          onDragStart={(index) => {
+            setDragIndex(index);
+            setPendingDelete(null);
+          }}
+          onDragOver={reorderByDrag}
+          onDragEnd={() => {
+            setDragIndex(null);
+            notify("Order saved");
+          }}
+        />
+      ) : (
+        <ChampionsPage
+          pools={config.champion_pools}
+          index={champions.champions}
+          version={champions.version}
+          portraitDir={portraitDir}
+          addingRole={addingRole}
+          addDraft={addDraft}
+          addHighlight={addHighlight}
+          hoverChamp={hoverChamp}
+          onStartAdd={(role) => {
+            setAddingRole((current) => (current === role ? null : role));
+            setAddDraft("");
+            setAddHighlight(0);
+          }}
+          onCancelAdd={() => {
+            setAddingRole(null);
+            setAddDraft("");
+          }}
+          onDraftChange={(value) => {
+            setAddDraft(value);
+            setAddHighlight(0);
+          }}
+          onHighlight={setAddHighlight}
+          onPick={pickChampion}
+          onRemove={removeChampion}
+          onMoveRole={moveRole}
+          onHoverChamp={setHoverChamp}
+        />
+      )}
 
       {dialog.open && (
         <AccountDialog
@@ -267,7 +456,7 @@ export default function App() {
         />
       )}
 
-      <Toast toast={toast} />
+      <Toast toast={toast} visible={toastVisible} />
     </div>
   );
 }

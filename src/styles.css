@@ -1,25 +1,42 @@
 @import "tailwindcss";
 
-/* Design tokens. These are the single source of truth for the look, and the
-   natural thing to replace when importing a design. Names carried over from
-   the previous Qt stylesheet so the two versions stay comparable. */
+/* Geist, self-hosted so the app renders correctly offline. */
+@import "@fontsource/geist-sans/300.css";
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
+@import "@fontsource/geist-sans/700.css";
+@import "@fontsource/geist-mono/400.css";
+@import "@fontsource/geist-mono/500.css";
+@import "@fontsource/geist-mono/600.css";
+
+/* Design tokens — the single source of truth for the look.
+   Warm charcoal neutral ramp with one terracotta accent; no other hue. */
 @theme {
-  --color-bg: #1a1b1e;
-  --color-surface: #25262b;
-  --color-surface-hi: #2e2f35;
-  --color-field: #303138;
-  --color-line: #35363c;
-  --color-ink: #e8e8ea;
-  --color-muted: #8b8d94;
-  --color-accent: #3d7eff;
-  --color-accent-hi: #5590ff;
-  --color-danger: #e5484d;
-  --color-ok: #4caf50;
+  --color-bg: #191714;
+  --color-surface: #1d1b17;
+  --color-surface-hi: #221e19;
+  --color-field: #201d19;
+  --color-field-hi: #241f1a;
+  --color-raised: #2a2620;
+  --color-line: #2a2620;
+  --color-line-soft: #221f1a;
+  --color-line-hi: #302b24;
+  --color-line-hover: #4a423a;
+  --color-ink: #f5f1ea;
+  --color-ink-dim: #e4ded4;
+  --color-muted: #9c9488;
+  --color-muted-2: #8e867a;
+  --color-disabled: #5e574e;
+  --color-accent: #c86f4b;
+  --color-accent-hi: #dd8460;
+  --color-danger: #c05540;
+  --color-danger-hi: #d06349;
+  --color-danger-ink: #e9b7a9;
+  --color-error: #e9a08c;
 
-  --radius-card: 12px;
-  --radius-chip: 999px;
-
-  --font-sans: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-sans: Geist, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
 }
 
 @layer base {
@@ -35,8 +52,7 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-size: 13px;
-    /* A desktop window is not a document: no rubber-banding, no text selection
-       on chrome, no right-click menu. */
+    /* A desktop window is not a document. */
     overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
@@ -44,153 +60,216 @@
 
   ::selection {
     background: var(--color-accent);
-    color: #fff;
+    color: #0e0d0b;
   }
 
-  /* Slim scrollbar matching the previous build. */
   ::-webkit-scrollbar {
-    width: 10px;
+    width: 8px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-line);
-    border-radius: 5px;
+    background: var(--color-line-hi);
+    border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #4a4b52;
+    background: #443d34;
   }
 
   button {
     cursor: pointer;
     font-family: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
   }
 
   input {
-    font-family: inherit;
+    font-family: var(--font-mono);
+  }
+  input::placeholder {
+    color: var(--color-muted-2);
   }
 }
 
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @layer components {
-  .card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-line);
-    border-radius: var(--radius-card);
-  }
+  .page-in { animation: pageIn 200ms ease; }
+  .card-in { animation: cardIn 220ms ease; }
+  .pop-in { animation: popIn 190ms cubic-bezier(.2, .7, .3, 1); }
+  .pop-in-fast { animation: popIn 150ms cubic-bezier(.2, .7, .3, 1); }
+  .fade-in { animation: fadeIn 140ms ease; }
+  .spin { animation: spin 800ms linear infinite; }
 
-  /* Click-to-copy value field. */
-  .value {
-    background: var(--color-field);
-    border: 1px solid var(--color-line);
-    border-radius: 6px;
-    padding: 7px 10px;
-    font-size: 12px;
-    text-align: left;
-    width: 100%;
-    transition: background-color 120ms ease, border-color 120ms ease;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .value:hover {
-    background: var(--color-surface-hi);
-    border-color: var(--color-accent);
-  }
+  .press:active { transform: scale(.975); }
 
-  .btn {
-    border-radius: 8px;
-    padding: 8px 14px;
+  /* Toolbar / dialog ghost button */
+  .ghost {
     font-size: 12px;
-    font-weight: 600;
-    background: var(--color-accent);
-    color: #fff;
-    border: 1px solid transparent;
-    transition: background-color 120ms ease, border-color 120ms ease;
-  }
-  .btn:hover:not(:disabled) {
-    background: var(--color-accent-hi);
-  }
-  .btn:disabled {
-    background: var(--color-field);
     color: var(--color-muted);
+    padding: 5px 9px;
+    border: 1px solid var(--color-line-hi);
+    border-radius: 6px;
+    white-space: nowrap;
+    transition: background-color 130ms ease, border-color 130ms ease,
+      color 130ms ease, transform 90ms ease;
+  }
+  .ghost:hover {
+    border-color: var(--color-line-hover);
+    color: var(--color-ink);
+  }
+  .ghost[data-on="true"] {
+    background: var(--color-raised);
+    border-color: #453d33;
+    color: var(--color-ink);
+  }
+
+  /* Larger ghost used in dialogs and the champion add row */
+  .ghost-lg {
+    font-size: 12px;
+    color: var(--color-muted);
+    padding: 9px 12px;
+    border: 1px solid var(--color-line-hi);
+    border-radius: 8px;
+    transition: background-color 130ms ease, border-color 130ms ease,
+      color 130ms ease, transform 90ms ease;
+  }
+  .ghost-lg:hover {
+    border-color: var(--color-line-hover);
+    color: var(--color-ink);
+  }
+
+  /* 26x24 per-card edit control */
+  .icon-btn {
+    width: 26px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    border: 1px solid var(--color-line-hi);
+    background: var(--color-field);
+    color: #c6bfb4;
+    font-size: 12px;
+    flex: none;
+    transition: background-color 130ms ease, border-color 130ms ease,
+      color 130ms ease, transform 90ms ease;
+  }
+  .icon-btn:hover:not(:disabled) {
+    background: var(--color-raised);
+    border-color: var(--color-line-hover);
+    color: var(--color-ink);
+  }
+  .icon-btn:disabled {
+    color: var(--color-disabled);
     cursor: default;
   }
 
-  .btn-ghost {
-    background: var(--color-field);
-    border-color: var(--color-line);
+  .icon-btn-danger {
+    color: #d8a292;
+    border-color: #3a2a25;
+  }
+  .icon-btn-danger:hover:not(:disabled) {
+    background: var(--color-raised);
+    border-color: var(--color-danger);
+    color: var(--color-danger-ink);
+  }
+
+  /* 22x22 borderless button in the role heading */
+  .role-btn {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 5px;
+    color: var(--color-muted-2);
+    font-size: 11px;
+    flex: none;
+    transition: background-color 130ms ease, color 130ms ease, transform 90ms ease;
+  }
+  .role-btn:hover:not(:disabled) {
+    background: var(--color-raised);
     color: var(--color-ink);
   }
-  .btn-ghost:hover:not(:disabled) {
-    background: var(--color-surface-hi);
-    border-color: var(--color-accent);
-  }
-  .btn-ghost[data-on="true"] {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: #fff;
+  .role-btn:disabled {
+    color: var(--color-disabled);
+    cursor: default;
   }
 
-  .btn-icon {
-    padding: 0;
-    width: 26px;
-    height: 24px;
-    display: inline-flex;
+  /* Click-to-copy field. Flashes to accent in 60ms, decays over 380ms. */
+  .copy-field {
+    flex: 1;
+    min-width: 0;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    font-size: 12px;
-    line-height: 1;
-  }
-
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 32px;
-    padding: 0 6px 0 12px;
-    background: var(--color-field);
-    border: 1px solid var(--color-line);
-    border-radius: var(--radius-chip);
-    font-size: 12px;
-    font-weight: 600;
-    transition: border-color 120ms ease;
-  }
-  .chip:hover {
-    border-color: var(--color-accent);
-  }
-
-  .field {
+    gap: 9px;
     background: var(--color-field);
     border: 1px solid var(--color-line);
     border-radius: 8px;
-    padding: 7px 10px;
+    padding: 8px 10px;
+    text-align: left;
+    transition: background-color 380ms ease, border-color 380ms ease,
+      transform 90ms ease;
+  }
+  .copy-field:hover {
+    border-color: var(--color-line-hover);
+    background: var(--color-field-hi);
+  }
+  .copy-field[data-flash="true"] {
+    border-color: var(--color-accent);
+    background: var(--color-field-hi);
+    transition: background-color 60ms ease, border-color 60ms ease;
+  }
+
+  .text-input {
+    background: var(--color-field);
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    padding: 9px 11px;
+    font-size: 12px;
     color: var(--color-ink);
     outline: none;
     user-select: text;
-    transition: border-color 120ms ease;
+    transition: border-color 130ms ease;
   }
-  .field:focus {
+  .text-input:focus {
     border-color: var(--color-accent);
-  }
-  .field::placeholder {
-    color: var(--color-muted);
   }
 
   .tab {
-    padding: 9px 22px;
-    border-radius: 8px;
-    font-weight: 600;
-    color: var(--color-muted);
-    background: transparent;
-    transition: background-color 120ms ease, color 120ms ease;
+    font-size: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid transparent;
+    color: var(--color-muted-2);
+    font-weight: 400;
+    transition: color 150ms ease, border-color 200ms ease;
   }
   .tab:hover {
     color: var(--color-ink);
   }
   .tab[data-active="true"] {
-    background: var(--color-surface);
     color: var(--color-ink);
+    font-weight: 500;
+    border-bottom-color: var(--color-accent);
   }
 }

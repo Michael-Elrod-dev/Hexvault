@@ -27,11 +27,16 @@ page.on("pageerror", (e) => errors.push(String(e)));
 
 const click = (label) =>
   page.evaluate((text) => {
-    const match = [...document.querySelectorAll("button")].find((b) =>
-      b.textContent?.includes(text),
+    const match = [...document.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === text,
     );
     match?.click();
   }, label);
+
+const type = async (selector, text) => {
+  await page.focus(selector);
+  await page.type(selector, text, { delay: 20 });
+};
 
 const settle = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
@@ -45,10 +50,10 @@ await settle();
 await page.screenshot({ path: `${OUT}/02-edit-mode.png` });
 await click("Edit");
 
-await click("Show Passwords");
+await click("Show passwords");
 await settle();
 await page.screenshot({ path: `${OUT}/03-passwords.png` });
-await click("Hide Passwords");
+await click("Hide passwords");
 
 await click("Champions");
 await settle(400);
@@ -58,10 +63,25 @@ await page.setViewport({ width: 900, height: 900 });
 await settle(400);
 await page.screenshot({ path: `${OUT}/05-champions-wide.png` });
 
+// champion picker
+await click("Champions");
+await settle(400);
+await page.evaluate(() => {
+  document.querySelectorAll("button")[0];
+  const plus = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "+");
+  plus?.click();
+});
+await settle(300);
+await type("input", "ka");
+await settle(400);
+await page.screenshot({ path: `${OUT}/07-picker.png` });
+await page.keyboard.press("Escape");
+await settle(200);
+
 await page.setViewport({ width: 520, height: 900 });
 await click("Accounts");
 await settle();
-await click("+ Add");
+await click("Add");
 await settle(350);
 await page.screenshot({ path: `${OUT}/06-dialog.png` });
 
