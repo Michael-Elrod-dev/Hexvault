@@ -1,21 +1,37 @@
 //! Config and rank-cache persistence.
 //!
-//! Everything lives in `%APPDATA%\LoLinfo\` so it survives rebuilds and does
+//! Everything lives in `%APPDATA%\Hexvault\` so it survives rebuilds and does
 //! not depend on the process working directory.
 
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Once;
 
 use serde::{Deserialize, Serialize};
 
-/// `%APPDATA%\LoLinfo` on Windows, `~/.config/LoLinfo` elsewhere.
+/// `%APPDATA%\Hexvault` on Windows, `~/.config/Hexvault` elsewhere.
 pub fn app_dir() -> PathBuf {
     let base = std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .or_else(|| dirs_home().map(|h| h.join(".config")))
         .unwrap_or_else(|| PathBuf::from("."));
-    base.join("LoLinfo")
+    let dir = base.join("Hexvault");
+
+    // The app shipped as LoL-Info before the rename. Carry that directory over
+    // once, so an upgrade does not silently orphan someone's accounts, cached
+    // ranks and portraits behind a name they no longer have a reason to look
+    // under. Only ever moves into a name that is not already taken, and a
+    // failed rename is not fatal: the app just starts empty at the new path.
+    static MIGRATED: Once = Once::new();
+    MIGRATED.call_once(|| {
+        let legacy = base.join("LoLinfo");
+        if legacy.is_dir() && !dir.exists() {
+            let _ = fs::rename(&legacy, &dir);
+        }
+    });
+
+    dir
 }
 
 fn dirs_home() -> Option<PathBuf> {

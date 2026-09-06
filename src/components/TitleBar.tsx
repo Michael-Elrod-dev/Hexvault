@@ -24,7 +24,7 @@ export function TitleBar() {
         data-tauri-drag-region
         className="font-mono text-[11px] tracking-[0.08em] text-muted-2"
       >
-        LOL-INFO
+        HEXVAULT
       </div>
       <div data-tauri-drag-region className="flex-1 self-stretch" />
 

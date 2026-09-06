@@ -1,12 +1,12 @@
 [package]
-name = "lol-info"
+name = "hexvault"
 version = "1.0.0"
-description = "League Account Manager"
+description = "Hexvault"
 authors = ["Michael Elrod"]
 edition = "2021"
 
 [lib]
-name = "lol_info_lib"
+name = "hexvault_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

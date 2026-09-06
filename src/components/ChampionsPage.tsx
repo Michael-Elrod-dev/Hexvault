@@ -23,13 +23,18 @@ type Props = {
   onRemove: (role: string, champion: string) => void;
   onMoveRole: (index: number, delta: number) => void;
   onHoverChamp: (key: string | null) => void;
+  dragChamp: { role: string; index: number } | null;
+  onChampDragStart: (role: string, index: number) => void;
+  onChampDragOver: (role: string, index: number) => void;
+  onChampDragEnd: () => void;
 };
 
 export function ChampionsPage(props: Props) {
   const {
     pools, index, version, portraitDir, addingRole, addDraft, addHighlight,
     hoverChamp, onStartAdd, onCancelAdd, onDraftChange, onHighlight, onPick,
-    onRemove, onMoveRole, onHoverChamp,
+    onRemove, onMoveRole, onHoverChamp, dragChamp, onChampDragStart,
+    onChampDragOver, onChampDragEnd,
   } = props;
 
   return (
@@ -91,15 +96,35 @@ export function ChampionsPage(props: Props) {
               )}
 
               <div className="grid grid-cols-6 gap-2.5">
-                {pool.champions.map((name) => {
+                {pool.champions.map((name, championIndex) => {
                   const key = `${pool.role}/${name}`;
                   const hovered = hoverChamp === key;
+                  const dragging =
+                    dragChamp?.role === pool.role && dragChamp.index === championIndex;
                   return (
                     <div
+                      /* Keyed by identity, not position. An index-based key makes
+                         React remount every tile on reorder, which aborts the
+                         in-flight drag. */
                       key={key}
                       className="flex flex-col gap-[5px]"
                       onMouseEnter={() => onHoverChamp(key)}
                       onMouseLeave={() => onHoverChamp(null)}
+                      draggable
+                      onDragStart={(e) => {
+                        /* Chromium cancels the drag outright if dragstart sets no
+                           data, so no dragover ever fires and nothing can reorder. */
+                        e.dataTransfer.setData("text/plain", name);
+                        e.dataTransfer.effectAllowed = "move";
+                        onChampDragStart(pool.role, championIndex);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        onChampDragOver(pool.role, championIndex);
+                      }}
+                      onDrop={(e) => e.preventDefault()}
+                      onDragEnd={onChampDragEnd}
                     >
                       <div className="relative">
                         <Portrait
@@ -107,9 +132,10 @@ export function ChampionsPage(props: Props) {
                           name={name}
                           version={version}
                           portraitDir={portraitDir}
-                          className="block aspect-square w-full rounded-[5px] bg-field transition-colors duration-150"
+                          className="block aspect-square w-full rounded-[5px] bg-field transition-[border-color,box-shadow] duration-150"
                           style={{
-                            border: `1px solid ${hovered ? "var(--color-accent)" : "var(--color-line)"}`,
+                            border: `1px solid ${hovered || dragging ? "var(--color-accent)" : "var(--color-line)"}`,
+                            boxShadow: dragging ? "0 8px 18px rgba(0,0,0,.45)" : "none",
                           }}
                         />
                         <button
@@ -128,7 +154,12 @@ export function ChampionsPage(props: Props) {
                           ✕
                         </button>
                       </div>
-                      <div className="truncate text-center text-[10px] text-muted">{name}</div>
+                      <div
+                        className="truncate text-center text-[10px] transition-colors duration-150"
+                        style={{ color: dragging ? "var(--color-accent)" : "var(--color-muted)" }}
+                      >
+                        {name}
+                      </div>
                     </div>
                   );
                 })}

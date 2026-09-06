@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "LoL-Info",
+  "productName": "Hexvault",
   "version": "1.0.0",
-  "identifier": "com.elrod.lolinfo",
+  "identifier": "com.elrod.hexvault",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "League Account Manager",
+        "title": "Hexvault",
         "width": 520,
         "height": 1030,
         "minWidth": 380,
@@ -30,8 +30,8 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "C:/Users/*/AppData/Roaming/LoLinfo/portraits/*",
-          "**/LoLinfo/portraits/*"
+          "C:/Users/*/AppData/Roaming/Hexvault/portraits/*",
+          "**/Hexvault/portraits/*"
         ]
       }
     }

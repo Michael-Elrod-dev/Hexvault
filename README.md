@@ -1,4 +1,4 @@
-# LoL-Info
+# Hexvault
 
 A desktop app for managing League of Legends accounts: click-to-copy
 credentials, live solo-queue ranks, and per-role champion pools.
@@ -23,11 +23,11 @@ every 24 hours; a personal or production key lasts longer.
 npm run tauri build
 ```
 
-Produces `src-tauri/target/release/lol-info.exe` (~5 MB) and an installer under
+Produces `src-tauri/target/release/hexvault.exe` (~5 MB) and an installer under
 `src-tauri/target/release/bundle/nsis/`.
 
 The built exe reads `.env` from its own directory, the working directory, or
-`%APPDATA%\LoLinfo\`. Putting a copy in `%APPDATA%\LoLinfo\.env` makes it work
+`%APPDATA%\Hexvault\`. Putting a copy in `%APPDATA%\Hexvault\.env` makes it work
 no matter where it is launched from.
 
 ## Using it
@@ -43,8 +43,10 @@ the reason in a toast, so a stale rank is never displayed as if it were current.
 
 **Champions.** Press `+` on a role, type, and pick from the dropdown. Free text
 cannot be submitted, so pool names always match Riot's spelling. The row closes
-when you pick or click away. Hover a portrait to remove that champion, and use
-the arrows in each heading to reorder roles.
+when you pick or click away. Hover a portrait to remove that champion, drag a
+portrait to reorder it within its role, and use the arrows in each heading to
+reorder roles themselves. Dragging is confined to one role: a champion cannot
+cross into another pool by accident.
 
 | Shortcut | Action |
 |---|---|
@@ -59,11 +61,11 @@ Nothing is stored in the repo.
 
 | Path | Contents |
 |---|---|
-| `%APPDATA%\LoLinfo\config.json` | Accounts, credentials, champion pools, window size |
-| `%APPDATA%\LoLinfo\ranks.json` | Cached ranks |
-| `%APPDATA%\LoLinfo\champions.json` | Champion names and Data Dragon asset ids |
-| `%APPDATA%\LoLinfo\portraits\` | Cached champion portraits (~4.6 MB) |
-| `%APPDATA%\LoLinfo\portraits.json` | ETag of each cached portrait, for revalidation |
+| `%APPDATA%\Hexvault\config.json` | Accounts, credentials, champion pools, window size |
+| `%APPDATA%\Hexvault\ranks.json` | Cached ranks |
+| `%APPDATA%\Hexvault\champions.json` | Champion names and Data Dragon asset ids |
+| `%APPDATA%\Hexvault\portraits\` | Cached champion portraits (~4.6 MB) |
+| `%APPDATA%\Hexvault\portraits.json` | ETag of each cached portrait, for revalidation |
 | `.env` | `RIOT_API_KEY` only. Gitignored. |
 
 The API key is read in Rust and never crosses into the webview or gets written
@@ -137,5 +139,5 @@ browser and still fail in the window.
   Windows.
 - **The asset protocol scope is an absolute path.** Tauri's `$APPDATA` variable
   resolves to `%APPDATA%\<bundle identifier>`, not this app's
-  `%APPDATA%\LoLinfo`. A wrong scope makes portraits fall back to the network,
+  `%APPDATA%\Hexvault`. A wrong scope makes portraits fall back to the network,
   which looks fine until you are offline.

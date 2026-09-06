@@ -37,6 +37,7 @@ export default function App() {
   const [copied, setCopied] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [champDrag, setChampDrag] = useState<{ role: string; index: number } | null>(null);
   const [dialog, setDialog] = useState<DialogState>({ open: false });
 
   const [addingRole, setAddingRole] = useState<string | null>(null);
@@ -48,6 +49,7 @@ export default function App() {
   const [toastVisible, setToastVisible] = useState(false);
 
   const dragMoved = useRef(false);
+  const champDragMoved = useRef(false);
   const saveTimer = useRef<number | null>(null);
   const flashTimer = useRef<number | null>(null);
   const toastTimers = useRef<number[]>([]);
@@ -378,6 +380,25 @@ export default function App() {
     notify(`Removed ${name}`);
   };
 
+  /* Reordering is confined to one role: a tile only reacts to a drag that
+     started in its own pool, so a champion can never hop roles by accident. */
+  const reorderChampionByDrag = (role: string, over: number) => {
+    if (!champDrag || champDrag.role !== role || champDrag.index === over) return;
+    const from = champDrag.index;
+    mutate((c) => ({
+      ...c,
+      champion_pools: c.champion_pools.map((p) => {
+        if (p.role !== role) return p;
+        const champions = [...p.champions];
+        const [moved] = champions.splice(from, 1);
+        champions.splice(over, 0, moved);
+        return { ...p, champions };
+      }),
+    }));
+    setChampDrag({ role, index: over });
+    champDragMoved.current = true;
+  };
+
   const moveRole = (index: number, delta: number) => {
     const target = index + delta;
     if (target < 0 || target >= config.champion_pools.length) return;
@@ -473,6 +494,20 @@ export default function App() {
           onRemove={removeChampion}
           onMoveRole={moveRole}
           onHoverChamp={setHoverChamp}
+          dragChamp={champDrag}
+          onChampDragStart={(role, index) => {
+            setChampDrag({ role, index });
+            setHoverChamp(null);
+            champDragMoved.current = false;
+          }}
+          onChampDragOver={reorderChampionByDrag}
+          onChampDragEnd={() => {
+            setChampDrag(null);
+            // A plain click fires dragend too, so only claim a save when the
+            // order actually moved.
+            if (champDragMoved.current) notify("Order saved");
+            champDragMoved.current = false;
+          }}
         />
       )}
 
