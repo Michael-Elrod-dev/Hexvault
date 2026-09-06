@@ -106,8 +106,6 @@ resize, and padded startup with ~600 ms of hardcoded sleeps plus a 2 s delay
 before ranks loaded. PySide6 fixed the algorithms; Tauri removed the remaining
 runtime cost and made the UI designable in CSS.
 
-Earlier versions are recoverable:
-
-```bash
-git checkout v2-pyside6    # PySide6 build
-```
+Both earlier implementations have been retired. The PySide6 source remains in
+git history at commit `77394ad`; the original CustomTkinter version was never
+committed and is gone.

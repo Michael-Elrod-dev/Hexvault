@@ -12,9 +12,6 @@ src-tauri/gen/
 # Screenshots from `npm run shot`
 screenshots/
 
-# Legacy builds, kept locally only (contain plaintext credentials)
-legacy/
-
 # IDE
 .idea/
 .vscode/
