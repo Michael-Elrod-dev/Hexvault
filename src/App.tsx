@@ -129,15 +129,31 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [refresh, refreshing, saveNow]);
 
+  // Save on close. Tauri hands the close over to this handler and only destroys
+  // the window once it resolves, so the save is raced against a timeout: a hung
+  // or slow write must never leave the user unable to close the app.
   useEffect(() => {
     if (!isTauri()) return;
     const unlisten = getCurrentWindow().onCloseRequested(async () => {
-      await saveNow();
+      await Promise.race([
+        saveNow().catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]);
     });
     return () => {
       void unlisten.then((f) => f());
     };
   }, [saveNow]);
+
+  // Persist geometry as it changes, so window size survives even if the
+  // close-time save is skipped.
+  useEffect(() => {
+    if (!isTauri()) return;
+    const unlisten = getCurrentWindow().onResized(() => scheduleSave());
+    return () => {
+      void unlisten.then((f) => f());
+    };
+  }, [scheduleSave]);
 
   if (!config) {
     return <div className="h-full" />;
