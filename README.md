@@ -3,30 +3,44 @@
 A small desktop app for managing League of Legends accounts: click-to-copy
 credentials, live solo-queue ranks, and per-role champion pools.
 
-Built with PySide6 (Qt). Windows-focused, but nothing here is Windows-only
-except the default config location.
+Tauri 2 (Rust) + React + Tailwind. Windows-focused; the WebView2 runtime it
+renders in ships with Windows 11.
 
 ## Running from source
 
 ```bash
-pip install -r requirements.txt
+npm install
 cp .env.example .env      # then paste your Riot API key into it
-python main.py
+npm run tauri dev
 ```
 
 Get a development API key at <https://developer.riotgames.com/>. Development
 keys expire every 24 hours; a personal or production key lasts longer.
 
-## Building the executable
+### Iterating on the UI without Rust
 
 ```bash
-pyinstaller --clean --noconfirm LoL-Info.spec
-cp .env dist/LoL-Info/.env
+npm run dev        # http://localhost:1420 in any browser
+npm run shot       # renders the UI to screenshots/ via headless Edge
 ```
 
-Output lands in `dist/LoL-Info/`. The spec builds **onedir**, not onefile: a
-onefile build re-extracts the entire bundle to a temp directory on every launch
-before Python starts, which cost the previous build 0.5-2s per start.
+Outside Tauri the frontend falls back to placeholder data (`src/mock.ts`), so
+the whole UI can be designed in a normal browser with hot reload — no Rust
+rebuild, no real credentials on screen. This is the loop to use when pasting in
+a design from Claude Design.
+
+## Building
+
+```bash
+npm run tauri build
+```
+
+Produces `src-tauri/target/release/lol-info.exe` (~4.5 MB) and an NSIS
+installer under `src-tauri/target/release/bundle/nsis/`.
+
+The built exe reads `.env` from its own directory, the working directory, or
+`%APPDATA%\LoLinfo\`. Putting a copy in `%APPDATA%\LoLinfo\.env` makes it work
+from any location.
 
 ## Where your data lives
 
@@ -36,24 +50,23 @@ Nothing is stored in the repo.
 |---|---|
 | `%APPDATA%\LoLinfo\config.json` | Accounts, credentials, champion pools, window size |
 | `%APPDATA%\LoLinfo\ranks.json` | Cached ranks, so cards render populated at startup |
-| `.env` (repo root or next to the .exe) | `RIOT_API_KEY` only. Gitignored. |
+| `.env` | `RIOT_API_KEY` only. Gitignored. |
 
-The API key is read from the environment or `.env` and is **never** written to
-`config.json`, so no file the repo tracks can contain it.
+The API key is read in Rust and **never** crosses into the webview or gets
+written to `config.json`.
 
-Precedence: `RIOT_API_KEY` environment variable, then `.env` beside the app,
-then `%APPDATA%\LoLinfo\.env`.
+Riot API calls run in Rust rather than the frontend because the API sends no
+CORS headers — a `fetch` from `tauri://localhost` would be blocked.
 
 ## Using it
 
-**Accounts tab.** Click any riot ID, account name, or password to copy it.
-*Show Passwords* unmasks them, *Edit* reveals per-card reorder / edit / delete
-controls, *+ Add* creates one. Ranks refresh automatically at launch and on
-demand via *Refresh* or `Ctrl+R`.
+**Accounts.** Click any riot ID, account name, or password to copy it.
+*Show Passwords* unmasks, *Edit* reveals reorder / edit / delete controls,
+*+ Add* creates one. Ranks load from cache instantly, then refresh in the
+background.
 
-**Champions tab.** Type a champion and press Enter to add it to a role; click
-the `×` on a chip to remove it. Changes save automatically after a short pause,
-or immediately with `Ctrl+S`.
+**Champions.** Type a champion and press Enter to add it to a role; click the
+`✕` on a chip to remove it. Changes save automatically after a short pause.
 
 | Shortcut | Action |
 |---|---|
@@ -63,32 +76,38 @@ or immediately with `Ctrl+S`.
 ## Layout
 
 ```
-main.py              entry point
-lolinfo/config.py    config + rank cache, .env resolution, atomic writes
-lolinfo/theme.py     dark stylesheet and rank colors
-lolinfo/riot.py      async Riot API client (QNetworkAccessManager)
-lolinfo/widgets.py   FlowLayout, ChampionChip, AccountCard, Toast
-lolinfo/window.py    main window and the two pages
-lolinfo/dialogs.py   add/edit account dialog
-tools/migrate.py     one-time import from the old CustomTkinter build
+src/
+  App.tsx                 state, persistence, shortcuts
+  api.ts                  Tauri command bridge (mock fallback in browser dev)
+  types.ts                shared types, rank colours, account keys
+  mock.ts                 placeholder data for browser dev only
+  styles.css              Tailwind v4 + design tokens
+  components/             AccountsPage, ChampionsPage, AccountDialog, Toast
+src-tauri/src/
+  config.rs               config + rank cache, .env resolution, atomic writes
+  riot.rs                 concurrent Riot API client
+  lib.rs                  Tauri commands
+tools/screenshot.mjs      headless UI capture
 ```
 
-## Notes on the rewrite
+## History
 
-This replaces a CustomTkinter version. The changes that mattered for speed:
+Three versions, each measured on the same machine with the same data
+(8 accounts, 35 champions):
 
-- **Champion chips reflow instead of rebuilding.** The old tab destroyed and
-  reconstructed all ~145 chip widgets on every resize and on the first tab
-  switch (~2,050 ms). `FlowLayout` repositions the existing widgets (~18 ms).
-- **Rank lookups run concurrently** on the Qt event loop rather than 16
-  sequential blocking requests on a worker thread. All 8 accounts resolve in
-  about 0.6s.
-- **Ranks are cached to disk**, so cards show last known values immediately
-  instead of "Loading..." on every launch.
-- **No artificial delays.** The old startup path contained ~600 ms of hardcoded
-  `after()` sleeps plus a 2,000 ms wait before ranks began loading.
-- **onedir packaging** instead of onefile.
+| | CustomTkinter | PySide6 | Tauri |
+|---|---:|---:|---:|
+| Usable UI | 4,670 ms | 1,040 ms | **~135 ms** |
+| Resize reflow | 2,050 ms | 18 ms | **~4 ms** |
+| Bundle | 32 MB | 119 MB | **4.5 MB** |
 
-One behavioral fix carried over: the old rank colouring tested `"Master" in
-text` before `"Grandmaster"`, so Grandmaster accounts rendered in Master purple.
-Tiers are now matched longest-first.
+The CustomTkinter build destroyed and rebuilt every champion chip on each
+resize, and padded startup with ~600 ms of hardcoded sleeps plus a 2 s delay
+before ranks loaded. PySide6 fixed the algorithms; Tauri removed the remaining
+runtime cost and made the UI designable in CSS.
+
+Earlier versions are recoverable:
+
+```bash
+git checkout v2-pyside6    # PySide6 build
+```

@@ -1,18 +1,20 @@
 # Secrets - never commit
 .env
 
-# Legacy CustomTkinter app: contains plaintext credentials, kept locally for rollback only
-legacy/
-
-# Build artifacts (the old exe has credentials compiled into it)
-build/
+# Node
+node_modules/
 dist/
-*.pyc
-__pycache__/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Screenshots from `npm run shot`
+screenshots/
+
+# Legacy builds, kept locally only (contain plaintext credentials)
+legacy/
 
 # IDE
 .idea/
 .vscode/
-
-# Local data (also lives in %APPDATA%\LoLinfo, never here)
-data/

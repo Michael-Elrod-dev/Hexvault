@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+/* Design tokens. These are the single source of truth for the look, and the
+   natural thing to replace when importing a design. Names carried over from
+   the previous Qt stylesheet so the two versions stay comparable. */
+@theme {
+  --color-bg: #1a1b1e;
+  --color-surface: #25262b;
+  --color-surface-hi: #2e2f35;
+  --color-field: #303138;
+  --color-line: #35363c;
+  --color-ink: #e8e8ea;
+  --color-muted: #8b8d94;
+  --color-accent: #3d7eff;
+  --color-accent-hi: #5590ff;
+  --color-danger: #e5484d;
+  --color-ok: #4caf50;
+
+  --radius-card: 12px;
+  --radius-chip: 999px;
+
+  --font-sans: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    /* A desktop window is not a document: no rubber-banding, no text selection
+       on chrome, no right-click menu. */
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: #fff;
+  }
+
+  /* Slim scrollbar matching the previous build. */
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 5px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4a4b52;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  input {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+  }
+
+  /* Click-to-copy value field. */
+  .value {
+    background: var(--color-field);
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 12px;
+    text-align: left;
+    width: 100%;
+    transition: background-color 120ms ease, border-color 120ms ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .value:hover {
+    background: var(--color-surface-hi);
+    border-color: var(--color-accent);
+  }
+
+  .btn {
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--color-accent);
+    color: #fff;
+    border: 1px solid transparent;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--color-accent-hi);
+  }
+  .btn:disabled {
+    background: var(--color-field);
+    color: var(--color-muted);
+    cursor: default;
+  }
+
+  .btn-ghost {
+    background: var(--color-field);
+    border-color: var(--color-line);
+    color: var(--color-ink);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--color-surface-hi);
+    border-color: var(--color-accent);
+  }
+  .btn-ghost[data-on="true"] {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+  }
+
+  .btn-icon {
+    padding: 0;
+    width: 26px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 6px 0 12px;
+    background: var(--color-field);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-chip);
+    font-size: 12px;
+    font-weight: 600;
+    transition: border-color 120ms ease;
+  }
+  .chip:hover {
+    border-color: var(--color-accent);
+  }
+
+  .field {
+    background: var(--color-field);
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    padding: 7px 10px;
+    color: var(--color-ink);
+    outline: none;
+    user-select: text;
+    transition: border-color 120ms ease;
+  }
+  .field:focus {
+    border-color: var(--color-accent);
+  }
+  .field::placeholder {
+    color: var(--color-muted);
+  }
+
+  .tab {
+    padding: 9px 22px;
+    border-radius: 8px;
+    font-weight: 600;
+    color: var(--color-muted);
+    background: transparent;
+    transition: background-color 120ms ease, color 120ms ease;
+  }
+  .tab:hover {
+    color: var(--color-ink);
+  }
+  .tab[data-active="true"] {
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+}
