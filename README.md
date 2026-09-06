@@ -137,7 +137,6 @@ browser and still fail in the window.
 - **HTML5 drag-and-drop needs `dragDropEnabled: false`.** Tauri's OS-level
   file-drop handler otherwise intercepts drag events inside the webview on
   Windows.
-- **The asset protocol scope is an absolute path.** Tauri's `$APPDATA` variable
-  resolves to `%APPDATA%\<bundle identifier>`, not this app's
-  `%APPDATA%\Hexvault`. A wrong scope makes portraits fall back to the network,
-  which looks fine until you are offline.
+- **The asset protocol scope is granted at runtime.** `lib.rs` allows the
+  portraits directory during setup, so a portrait that renders online but not
+  offline means that grant failed.

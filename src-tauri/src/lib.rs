@@ -136,6 +136,12 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![bootstrap, save_config, fetch_ranks, copy_text])
         .setup(|app| {
+            // The portrait cache is the only directory the webview may read
+            // through the asset protocol.
+            app.asset_protocol_scope()
+                .allow_directory(ddragon::portrait_dir(), false)
+                .map_err(|e| e.to_string())?;
+
             // Restore saved window geometry, clamped to the current monitor.
             if let Some(window) = app.get_webview_window("main") {
                 let saved = config::load().map(|l| l.config).unwrap_or_default().window;

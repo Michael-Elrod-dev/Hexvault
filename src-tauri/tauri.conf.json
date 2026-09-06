@@ -30,10 +30,7 @@
       "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https://ddragon.leagueoflegends.com; font-src 'self' data:; connect-src ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
       "assetProtocol": {
         "enable": true,
-        "scope": [
-          "C:/Users/*/AppData/Roaming/Hexvault/portraits/*",
-          "**/Hexvault/portraits/*"
-        ]
+        "scope": []
       }
     }
   },
