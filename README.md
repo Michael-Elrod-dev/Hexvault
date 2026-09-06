@@ -68,8 +68,36 @@ Nothing is stored in the repo.
 | `%APPDATA%\Hexvault\portraits.json` | ETag of each cached portrait, for revalidation |
 | `.env` | `RIOT_API_KEY` only. Gitignored. |
 
-The API key is read in Rust and never crosses into the webview or gets written
-to `config.json`.
+## Security
+
+**Credentials are encrypted to your Windows account.** Logins and passwords in
+`%APPDATA%\Hexvault\config.json` are encrypted with Windows DPAPI. Another user
+on the same PC, a copy of the file on another machine, a backup, or a disk image
+cannot read them. Programs running under your own Windows account can, because
+they can ask Windows to decrypt the same way Hexvault does. Do not run Hexvault
+on a machine you do not trust.
+
+Because the encryption is tied to your Windows login, a `config.json` copied to
+another PC or user will not open. Hexvault keeps the file as
+`config.json.unreadable-<timestamp>` and starts empty. There is no export, so
+re-enter accounts on the new machine.
+
+**Copying puts the value on the Windows clipboard.** Hexvault marks every copy
+as excluded from clipboard history (Win+V) and from cloud clipboard sync, and
+clears it after 30 seconds if you have not copied something else. Until then any
+running program can read the clipboard.
+
+**The installer is not code-signed.** Windows SmartScreen will show "Unknown
+publisher". Choose *More info*, then *Run anyway*. Before you do, compare the
+file's SHA-256 with the value in the release notes.
+
+    certutil -hashfile Hexvault_<version>_x64-setup.exe SHA256
+
+The installer is per-user (`%LOCALAPPDATA%\Hexvault`) and does not ask for
+administrator rights.
+
+The Riot API key in `.env` is read by the Rust process only and is never written
+to `config.json` or shown in the UI.
 
 ## How it fits together
 
