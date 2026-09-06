@@ -361,6 +361,8 @@ export default function App() {
         p.role === role ? { ...p, champions: [...p.champions, champion.name] } : p,
       ),
     }));
+    // Picking closes the row; reopening with + is one click if you want another.
+    setAddingRole(null);
     setAddDraft("");
     setAddHighlight(0);
     notify(`Added ${champion.name} to ${role}`);

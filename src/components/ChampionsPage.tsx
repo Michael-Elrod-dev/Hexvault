@@ -65,6 +65,7 @@ export function ChampionsPage(props: Props) {
                   ↓
                 </button>
                 <button
+                  data-add-toggle={pool.role}
                   className="role-btn press text-accent hover:!bg-[rgba(200,111,75,.14)] hover:!text-accent"
                   style={{ fontSize: 14 }}
                   title={`Add a champion to ${pool.role}`}
@@ -76,6 +77,7 @@ export function ChampionsPage(props: Props) {
 
               {addingRole === pool.role && (
                 <AddRow
+                  role={pool.role}
                   draft={addDraft}
                   matches={matches}
                   highlight={addHighlight}
@@ -140,6 +142,7 @@ export function ChampionsPage(props: Props) {
 }
 
 function AddRow({
+  role,
   draft,
   matches,
   highlight,
@@ -150,6 +153,7 @@ function AddRow({
   onPick,
   onCancel,
 }: {
+  role: string;
   draft: string;
   matches: Champion[];
   highlight: number;
@@ -161,7 +165,23 @@ function AddRow({
   onCancel: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const wrapper = useRef<HTMLDivElement>(null);
   useEffect(() => input.current?.focus(), []);
+
+  /* Clicking anywhere outside closes the row, so there is no Cancel button.
+     The role's own + toggle is excluded, otherwise it would close here and
+     immediately reopen from its own onClick. */
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (wrapper.current?.contains(target)) return;
+      if (target.closest(`[data-add-toggle="${role}"]`)) return;
+      onCancel();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [onCancel, role]);
 
   const querying = draft.trim().length > 0;
 
@@ -185,20 +205,15 @@ function AddRow({
   };
 
   return (
-    <div className="fade-in relative mb-3.5">
-      <div className="flex gap-2">
-        <input
-          ref={input}
-          className="text-input min-w-0 flex-1"
-          placeholder="Start typing a champion…"
-          value={draft}
-          onChange={(e) => onDraftChange(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
-        <button className="ghost-lg press" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
+    <div ref={wrapper} className="fade-in relative mb-3.5">
+      <input
+        ref={input}
+        className="text-input w-full"
+        placeholder="Start typing a champion…"
+        value={draft}
+        onChange={(e) => onDraftChange(e.target.value)}
+        onKeyDown={onKeyDown}
+      />
 
       {querying && (
         <div
