@@ -30,6 +30,30 @@ pub fn portrait_dir() -> PathBuf {
     app_dir().join("portraits")
 }
 
+fn manifest_path() -> PathBuf {
+    app_dir().join("portraits.json")
+}
+
+/// Records which build of each portrait is on disk.
+///
+/// Data Dragon serves the ETag as the content MD5, so comparing it against the
+/// stored value detects a champion whose art was updated even though its name
+/// and id are unchanged -- a visual rework, which a file-exists check misses.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct PortraitManifest {
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    etags: HashMap<String, String>,
+}
+
+fn load_manifest() -> PortraitManifest {
+    fs::read_to_string(manifest_path())
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
 /// One champion, as the UI needs it: display name plus the asset id used to
 /// build the portrait filename. Storing the id removes any need for a
 /// name-to-id mapping table.
@@ -108,8 +132,27 @@ async fn fetch_champions(client: &reqwest::Client, version: &str) -> Result<Vec<
     Ok(champions)
 }
 
-/// Download any portrait not already on disk. Existing files are left alone, so
-/// a warm cache costs nothing and only new champions are fetched after a patch.
+/// What revalidating one cached portrait concluded.
+enum Verdict {
+    /// Cached copy is current.
+    Keep,
+    /// Cached bytes look right; record the ETag so later checks are exact.
+    Adopt(String),
+    /// Art changed, or we cannot prove it did not.
+    Refetch,
+}
+
+fn portrait_url(version: &str, id: &str) -> String {
+    format!("https://ddragon.leagueoflegends.com/cdn/{version}/img/champion/{id}.png")
+}
+
+/// Fetch portraits that are missing or out of date.
+///
+/// Missing files are always fetched. When the Data Dragon version has moved on,
+/// every cached portrait is revalidated with a HEAD request and re-fetched only
+/// if its ETag changed, so a visual rework is picked up without re-downloading
+/// the whole set. While the version is unchanged nothing is requested at all --
+/// asset URLs are version-scoped and immutable.
 async fn sync_portraits(
     client: &reqwest::Client,
     version: &str,
@@ -120,42 +163,112 @@ async fn sync_portraits(
         return 0;
     }
 
-    let missing: Vec<&Champion> = champions
-        .iter()
-        .filter(|c| !dir.join(format!("{}.png", c.id)).exists())
-        .collect();
+    let mut manifest = load_manifest();
+    let revalidate = manifest.version != version;
+
+    let mut stale: Vec<&Champion> = Vec::new();
+    let mut present: Vec<&Champion> = Vec::new();
+    for champion in champions {
+        if dir.join(format!("{}.png", champion.id)).exists() {
+            present.push(champion);
+        } else {
+            stale.push(champion);
+        }
+    }
+
+    if revalidate {
+        for batch in present.chunks(PORTRAIT_CONCURRENCY) {
+            let checks = batch.iter().map(|champion| {
+                let client = client.clone();
+                let url = portrait_url(version, &champion.id);
+                let known = manifest.etags.get(&champion.id).cloned();
+                let local_len = fs::metadata(dir.join(format!("{}.png", champion.id)))
+                    .map(|m| m.len())
+                    .unwrap_or(0);
+                async move {
+                    let Ok(response) = client.head(&url).send().await else {
+                        // Offline: keep what is on disk rather than discarding it.
+                        return Verdict::Keep;
+                    };
+                    let headers = response.headers();
+                    let etag = headers
+                        .get(reqwest::header::ETAG)
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| s.to_string());
+                    let remote_len = headers
+                        .get(reqwest::header::CONTENT_LENGTH)
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|v| v.parse::<u64>().ok());
+
+                    match (known, etag) {
+                        (Some(known), Some(fresh)) if known == fresh => Verdict::Keep,
+                        // No stored ETag yet: adopt it without re-downloading
+                        // when the cached file is already the right size, so
+                        // upgrading does not refetch the whole set.
+                        (None, Some(fresh)) if remote_len == Some(local_len) && local_len > 0 => {
+                            Verdict::Adopt(fresh)
+                        }
+                        _ => Verdict::Refetch,
+                    }
+                }
+            });
+            let verdicts = futures::future::join_all(checks).await;
+            for (champion, verdict) in batch.iter().zip(verdicts) {
+                match verdict {
+                    Verdict::Keep => {}
+                    Verdict::Adopt(etag) => {
+                        manifest.etags.insert(champion.id.clone(), etag);
+                    }
+                    Verdict::Refetch => stale.push(champion),
+                }
+            }
+        }
+    }
 
     let mut downloaded = 0usize;
-    for batch in missing.chunks(PORTRAIT_CONCURRENCY) {
+    for batch in stale.chunks(PORTRAIT_CONCURRENCY) {
         let jobs = batch.iter().map(|champion| {
             let client = client.clone();
             let dir = dir.clone();
             let id = champion.id.clone();
-            let version = version.to_string();
+            let url = portrait_url(version, &id);
             async move {
-                let url = format!(
-                    "https://ddragon.leagueoflegends.com/cdn/{version}/img/champion/{id}.png"
-                );
-                let Ok(response) = client.get(&url).send().await else { return false };
+                let Ok(response) = client.get(&url).send().await else { return None };
                 if !response.status().is_success() {
-                    return false;
+                    return None;
                 }
-                let Ok(bytes) = response.bytes().await else { return false };
+                let etag = response
+                    .headers()
+                    .get(reqwest::header::ETAG)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string());
+                let Ok(bytes) = response.bytes().await else { return None };
                 // Write to a temp name then rename, so a half-written PNG is
                 // never visible to the webview.
                 let final_path = dir.join(format!("{id}.png"));
                 let tmp = dir.join(format!(".{id}.png.tmp"));
                 if fs::write(&tmp, &bytes).is_err() {
-                    return false;
+                    return None;
                 }
                 if fs::rename(&tmp, &final_path).is_err() {
                     let _ = fs::remove_file(&tmp);
-                    return false;
+                    return None;
                 }
-                true
+                Some((id, etag))
             }
         });
-        downloaded += futures::future::join_all(jobs).await.into_iter().filter(|ok| *ok).count();
+        for result in futures::future::join_all(jobs).await.into_iter().flatten() {
+            let (id, etag) = result;
+            if let Some(etag) = etag {
+                manifest.etags.insert(id, etag);
+            }
+            downloaded += 1;
+        }
+    }
+
+    manifest.version = version.to_string();
+    if let Ok(json) = serde_json::to_string_pretty(&manifest) {
+        let _ = atomic_write(&manifest_path(), &json);
     }
     downloaded
 }

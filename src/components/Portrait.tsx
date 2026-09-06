@@ -26,12 +26,12 @@ export function Portrait({
   className,
   style,
 }: Props) {
-  const local = localPortrait(championId, portraitDir);
+  const local = localPortrait(championId, portraitDir, version);
   const [src, setSrc] = useState(local ?? remotePortrait(championId, version));
 
   // A new id (renamed champion, different search result) resets the cascade.
   useEffect(() => {
-    setSrc(localPortrait(championId, portraitDir) ?? remotePortrait(championId, version));
+    setSrc(localPortrait(championId, portraitDir, version) ?? remotePortrait(championId, version));
   }, [championId, portraitDir, version]);
 
   return (

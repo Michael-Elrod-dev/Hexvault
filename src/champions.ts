@@ -35,11 +35,22 @@ export function idFor(name: string, index: Champion[]): string {
   return ci ? ci.id : guessId(name);
 }
 
-/** Local cached portrait, readable by the webview through the asset protocol. */
-export function localPortrait(id: string, portraitDir: string): string | null {
+/**
+ * Local cached portrait, readable by the webview through the asset protocol.
+ *
+ * The Data Dragon version is appended as a query so that a portrait replaced on
+ * disk after a visual rework gets a distinct URL; without it the webview can
+ * keep serving its cached copy of the old art indefinitely.
+ */
+export function localPortrait(
+  id: string,
+  portraitDir: string,
+  version: string,
+): string | null {
   if (!isTauri() || !portraitDir) return null;
   const separator = portraitDir.includes("\\") ? "\\" : "/";
-  return convertFileSrc(`${portraitDir}${separator}${id}.png`);
+  const src = convertFileSrc(`${portraitDir}${separator}${id}.png`);
+  return version ? `${src}?v=${encodeURIComponent(version)}` : src;
 }
 
 /** Remote portrait, used until the disk cache has filled. */

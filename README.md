@@ -63,6 +63,7 @@ Nothing is stored in the repo.
 | `%APPDATA%\LoLinfo\ranks.json` | Cached ranks |
 | `%APPDATA%\LoLinfo\champions.json` | Champion names and Data Dragon asset ids |
 | `%APPDATA%\LoLinfo\portraits\` | Cached champion portraits (~4.6 MB) |
+| `%APPDATA%\LoLinfo\portraits.json` | ETag of each cached portrait, for revalidation |
 | `.env` | `RIOT_API_KEY` only. Gitignored. |
 
 The API key is read in Rust and never crosses into the webview or gets written
@@ -100,6 +101,14 @@ background task refreshes at launch, and the UI redraws in place only when
 something actually changed. Everything is cached to disk, so the champion grid
 works offline. The Data Dragon version is read from `versions.json` rather than
 pinned, so a patch cannot orphan the assets.
+
+Portrait freshness is tracked by ETag, which Data Dragon serves as the image's
+content hash. While the version is unchanged nothing is requested — asset URLs
+are version-scoped and immutable. When the version moves, each cached portrait
+is revalidated with a HEAD request and re-fetched only if its ETag changed, so
+a visual rework is picked up even though the champion's name and id stay the
+same. The version is also appended to the `asset://` URL, otherwise the webview
+would keep serving its cached copy of the old art.
 
 ## Working on the UI
 
