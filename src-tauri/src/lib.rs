@@ -7,7 +7,7 @@ mod riot;
 use std::collections::HashMap;
 
 use config::Config;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 /// Everything the first paint needs, read from disk. No network here — the app
 /// must be usable before any request completes.
@@ -61,6 +61,32 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![bootstrap, save_config, fetch_ranks])
         .setup(|app| {
+            // Restore the saved window geometry. Sizes are clamped to the
+            // current monitor so a stale value from a larger or disconnected
+            // display cannot strand the window off-screen.
+            if let Some(window) = app.get_webview_window("main") {
+                let saved = config::load().window;
+                if let Ok(Some(monitor)) = window.current_monitor() {
+                    let bounds = monitor.size();
+                    let scale = monitor.scale_factor();
+                    let max_w = (bounds.width as f64 / scale) as u32;
+                    let max_h = (bounds.height as f64 / scale) as u32;
+                    let width = saved.width.clamp(380, max_w);
+                    let height = saved.height.clamp(400, max_h);
+                    let _ = window.set_size(tauri::LogicalSize::new(width, height));
+
+                    if let (Some(x), Some(y)) = (saved.x, saved.y) {
+                        let fits_x = x > -(width as i32) && x < max_w as i32;
+                        let fits_y = y >= 0 && y < max_h as i32;
+                        if fits_x && fits_y {
+                            let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+                        } else {
+                            let _ = window.center();
+                        }
+                    }
+                }
+            }
+
             // Champion data refresh, detached so it can never delay the window.
             // Emits only when something actually changed, so the UI redraws on
             // a new patch but stays still on the common no-op case.

@@ -79,9 +79,22 @@ export default function App() {
     try {
       let payload = current;
       if (isTauri()) {
-        const { width, height } = await getCurrentWindow().outerSize();
-        const position = await getCurrentWindow().outerPosition();
-        payload = { ...current, window: { width, height, x: position.x, y: position.y } };
+        // innerSize, not outerSize: the outer size includes the invisible
+        // resize border, and restoring that as the requested size makes the
+        // window grow a little on every launch.
+        const window_ = getCurrentWindow();
+        const scale = await window_.scaleFactor();
+        const inner = (await window_.innerSize()).toLogical(scale);
+        const position = (await window_.outerPosition()).toLogical(scale);
+        payload = {
+          ...current,
+          window: {
+            width: Math.round(inner.width),
+            height: Math.round(inner.height),
+            x: Math.round(position.x),
+            y: Math.round(position.y),
+          },
+        };
       }
       await api.saveConfig(payload);
     } catch (e) {

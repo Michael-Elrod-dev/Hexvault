@@ -1,4 +1,5 @@
 import type { Account } from "../types";
+import { ScrollArea } from "./ScrollArea";
 import { accountKey, parseRank, riotId } from "../types";
 
 type Props = {
@@ -61,7 +62,8 @@ export function AccountsPage(props: Props) {
         </button>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-5 pb-5">
+      <ScrollArea className="px-5 pb-5">
+        <div className="flex flex-col gap-2.5">
         {accounts.length === 0 && (
           <p className="mt-10 text-center text-muted">No accounts yet. Use Add to create one.</p>
         )}
@@ -122,14 +124,16 @@ export function AccountsPage(props: Props) {
 
                     <div className="flex-1" />
 
-                    <div
-                      className="flex-none text-[13px] font-medium whitespace-nowrap"
-                      style={{ color: rank.color }}
-                    >
-                      {rank.label}
-                    </div>
-                    <div className="min-w-[50px] flex-none text-right font-mono text-[11px] text-muted-2">
-                      {rank.lp}
+                    <div className="flex flex-none items-baseline gap-1.5">
+                      <div
+                        className="text-[13px] font-medium whitespace-nowrap"
+                        style={{ color: rank.color }}
+                      >
+                        {rank.label}
+                      </div>
+                      <div className="min-w-[38px] text-right font-mono text-[11px] text-muted-2">
+                        {rank.lp}
+                      </div>
                     </div>
 
                     <div
@@ -221,7 +225,8 @@ export function AccountsPage(props: Props) {
             </div>
           );
         })}
-      </div>
+        </div>
+      </ScrollArea>
     </div>
   );
 }

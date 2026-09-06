@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { idFor, searchChampions } from "../champions";
 import type { Champion, Pool } from "../types";
 import { Portrait } from "./Portrait";
+import { ScrollArea } from "./ScrollArea";
 
 const MAX_SUGGESTIONS = 5;
 
@@ -33,7 +34,7 @@ export function ChampionsPage(props: Props) {
 
   return (
     <div className="page-in flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-1 pb-7">
+      <ScrollArea className="px-5 pt-1 pb-7">
         {pools.map((pool, i) => {
           const matches = searchChampions(addDraft, index, pool.champions).slice(
             0,
@@ -133,7 +134,7 @@ export function ChampionsPage(props: Props) {
             </section>
           );
         })}
-      </div>
+      </ScrollArea>
     </div>
   );
 }

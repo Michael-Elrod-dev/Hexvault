@@ -63,18 +63,12 @@
     color: #0e0d0b;
   }
 
+  /* Native scrollbars occupy layout width, which makes horizontal padding
+     uneven depending on whether they are showing. ScrollArea draws an overlay
+     thumb instead. */
   ::-webkit-scrollbar {
-    width: 8px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: var(--color-line-hi);
-    border-radius: 4px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #443d34;
+    width: 0;
+    height: 0;
   }
 
   button {
@@ -115,6 +109,15 @@
 }
 
 @layer components {
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
   .page-in { animation: pageIn 200ms ease; }
   .card-in { animation: cardIn 220ms ease; }
   .pop-in { animation: popIn 190ms cubic-bezier(.2, .7, .3, 1); }
