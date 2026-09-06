@@ -11,6 +11,7 @@ import { AccountsPage } from "./components/AccountsPage";
 import { ChampionsPage } from "./components/ChampionsPage";
 import { AccountDialog } from "./components/AccountDialog";
 import { Toast, type ToastState } from "./components/Toast";
+import { TitleBar } from "./components/TitleBar";
 
 const SAVE_DEBOUNCE_MS = 800;
 const TOAST_HOLD_MS = 1700;
@@ -46,6 +47,7 @@ export default function App() {
   const [toast, setToast] = useState<ToastState>(null);
   const [toastVisible, setToastVisible] = useState(false);
 
+  const dragMoved = useRef(false);
   const saveTimer = useRef<number | null>(null);
   const flashTimer = useRef<number | null>(null);
   const toastTimers = useRef<number[]>([]);
@@ -266,7 +268,13 @@ export default function App() {
     [],
   );
 
-  if (!config) return <div className="h-full" />;
+  if (!config) {
+    return (
+      <div className="flex h-full flex-col">
+        <TitleBar />
+      </div>
+    );
+  }
 
   /* ---------- handlers ---------- */
 
@@ -298,6 +306,7 @@ export default function App() {
       return { ...c, accounts };
     });
     setDragIndex(over);
+    dragMoved.current = true;
   };
 
   const confirmDelete = (index: number) => {
@@ -368,6 +377,7 @@ export default function App() {
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
+      <TitleBar />
       <div className="flex flex-none gap-6 px-5 pt-[18px]">
         <button className="tab" data-active={tab === "accounts"} onClick={() => setTab("accounts")}>
           Accounts
@@ -410,11 +420,15 @@ export default function App() {
           onDragStart={(index) => {
             setDragIndex(index);
             setPendingDelete(null);
+            dragMoved.current = false;
           }}
           onDragOver={reorderByDrag}
           onDragEnd={() => {
             setDragIndex(null);
-            notify("Order saved");
+            // Only claim a save when the order actually changed; a plain click
+            // also fires dragend.
+            if (dragMoved.current) notify("Order saved");
+            dragMoved.current = false;
           }}
         />
       ) : (
