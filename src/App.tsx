@@ -203,10 +203,9 @@ export default function App() {
   /**
    * Snap stored pool names to Riot's canonical spelling.
    *
-   * Names added before the picker existed were free text and can differ in
-   * case ("K'sante" vs "K'Sante"), which breaks portrait lookup and the
-   * already-in-pool check. Runs whenever the index changes, so it also repairs
-   * names Riot itself renames later.
+   * A name that differs only in case ("K'sante" vs "K'Sante") breaks portrait
+   * lookup and the already-in-pool check. Runs whenever the index changes, so
+   * it also repairs names Riot renames later.
    */
   useEffect(() => {
     if (champions.champions.length === 0 || !latest.current) return;

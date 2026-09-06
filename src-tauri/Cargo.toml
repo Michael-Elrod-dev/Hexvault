@@ -1,6 +1,6 @@
 [package]
 name = "lol-info"
-version = "3.0.0"
+version = "1.0.0"
 description = "League Account Manager"
 authors = ["Michael Elrod"]
 edition = "2021"

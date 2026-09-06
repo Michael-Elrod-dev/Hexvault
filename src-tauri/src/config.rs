@@ -1,8 +1,7 @@
 //! Config and rank-cache persistence.
 //!
-//! Reads and writes the exact same files the PySide6 version used
-//! (`%APPDATA%\LoLinfo\config.json` and `ranks.json`), with the same schema,
-//! so no migration is needed and both apps can run against one data set.
+//! Everything lives in `%APPDATA%\LoLinfo\` so it survives rebuilds and does
+//! not depend on the process working directory.
 
 use std::fs;
 use std::io::Write;
@@ -34,7 +33,7 @@ pub fn rank_cache_path() -> PathBuf {
 }
 
 /// Directories searched for a `.env`, nearest first: next to the executable,
-/// then the app data dir. Mirrors the Python resolution order.
+/// then the app data dir.
 fn env_search_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
@@ -105,7 +104,7 @@ pub struct Account {
 }
 
 impl Account {
-    /// Cache identity. Riot IDs are case-insensitive, matching the Python `key`.
+    /// Cache identity. Riot IDs are case-insensitive.
     pub fn key(&self) -> String {
         format!("{}#{}", self.riot_name.to_lowercase(), self.tag.to_lowercase())
     }
