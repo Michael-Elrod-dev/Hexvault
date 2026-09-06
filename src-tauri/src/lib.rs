@@ -3,6 +3,7 @@
 mod config;
 mod ddragon;
 mod riot;
+mod secret;
 
 use std::collections::HashMap;
 
@@ -19,16 +20,54 @@ pub struct Bootstrap {
     /// Absolute path to the portrait cache, for the frontend to turn into
     /// asset:// URLs via convertFileSrc.
     portrait_dir: String,
+    /// Message for the user when the saved config needed attention.
+    warning: Option<String>,
+}
+
+/// Read the config, rewriting a plaintext file as encrypted and preserving one
+/// that cannot be read. The second value is a message for the user.
+fn read_config() -> (Config, Option<String>) {
+    let path = config::config_path();
+    match config::load() {
+        Ok(loaded) if loaded.migrated_from_v1 => {
+            let warning = config::save_to(&path, &loaded.config, false)
+                .err()
+                .map(|e| format!("Saved accounts could not be encrypted ({e})."));
+            // A plaintext backup must not outlive the upgrade.
+            let _ = std::fs::remove_file(path.with_extension("json.bak"));
+            (loaded.config, warning)
+        }
+        Ok(loaded) => (loaded.config, None),
+        Err(config::LoadError::Unreadable(reason)) => {
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let kept = path.with_extension(format!("json.unreadable-{stamp}"));
+            let warning = match std::fs::rename(&path, &kept) {
+                Ok(()) => format!(
+                    "Saved accounts could not be read ({reason}). The file was kept as {}.",
+                    kept.file_name().unwrap_or_default().to_string_lossy()
+                ),
+                Err(e) => format!(
+                    "Saved accounts could not be read ({reason}). Keeping the old file failed: {e}"
+                ),
+            };
+            (Config::default(), Some(warning))
+        }
+    }
 }
 
 #[tauri::command]
 fn bootstrap() -> Bootstrap {
+    let (config, warning) = read_config();
     Bootstrap {
-        config: config::load(),
+        config,
         ranks: config::load_ranks(),
         has_api_key: !config::resolve_api_key().is_empty(),
         champions: ddragon::cached(),
         portrait_dir: ddragon::portrait_dir().to_string_lossy().into_owned(),
+        warning,
     }
 }
 
@@ -62,7 +101,7 @@ pub fn run() {
         .setup(|app| {
             // Restore saved window geometry, clamped to the current monitor.
             if let Some(window) = app.get_webview_window("main") {
-                let saved = config::load().window;
+                let saved = config::load().map(|l| l.config).unwrap_or_default().window;
                 if let Ok(Some(monitor)) = window.current_monitor() {
                     let bounds = monitor.size();
                     let scale = monitor.scale_factor();

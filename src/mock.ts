@@ -8,7 +8,7 @@ export const isTauri = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 const MOCK_CONFIG: Config = {
-  version: 1,
+  version: 2,
   window: { width: 520, height: 900, x: null, y: null },
   passwords_visible: false,
   accounts: [

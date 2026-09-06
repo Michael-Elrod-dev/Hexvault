@@ -1395,6 +1395,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 name = "hexvault"
 version = "1.0.0"
 dependencies = [
+ "base64 0.22.1",
  "futures",
  "reqwest 0.12.28",
  "serde",
@@ -1403,6 +1404,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-clipboard-manager",
  "urlencoding",
+ "windows",
 ]
 
 [[package]]

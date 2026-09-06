@@ -15,6 +15,8 @@ import { TitleBar } from "./components/TitleBar";
 
 const SAVE_DEBOUNCE_MS = 800;
 const TOAST_HOLD_MS = 1700;
+/** Long enough to read a startup warning about the saved config. */
+const WARNING_HOLD_MS = 8000;
 const FLASH_MS = 200;
 
 type DialogState = { open: false } | { open: true; index: number | null };
@@ -58,14 +60,14 @@ export default function App() {
 
   /* ---------- toast ---------- */
 
-  const notify = useCallback((message: string) => {
+  const notify = useCallback((message: string, holdMs = TOAST_HOLD_MS) => {
     toastTimers.current.forEach(clearTimeout);
     toastTimers.current = [];
     setToast({ id: Date.now(), message });
     setToastVisible(true);
     toastTimers.current.push(
-      window.setTimeout(() => setToastVisible(false), TOAST_HOLD_MS),
-      window.setTimeout(() => setToast(null), TOAST_HOLD_MS + 260),
+      window.setTimeout(() => setToastVisible(false), holdMs),
+      window.setTimeout(() => setToast(null), holdMs + 260),
     );
   }, []);
 
@@ -180,12 +182,13 @@ export default function App() {
           ? boot.champions
           : { version: boot.champions.version, champions: seedIndex(boot.config) },
       );
+      if (boot.warning) notify(boot.warning, WARNING_HOLD_MS);
       if (boot.has_api_key) void refresh(boot.config.accounts, true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [refresh]);
+  }, [notify, refresh]);
 
   // Redraw when the background champion refresh finds something new.
   useEffect(() => {

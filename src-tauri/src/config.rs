@@ -6,6 +6,11 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::secret;
+
+/// On-disk format written by every save.
+const CURRENT_VERSION: u32 = 2;
+
 /// `%APPDATA%\Hexvault` on Windows, `~/.config/Hexvault` elsewhere.
 pub fn app_dir() -> PathBuf {
     let base = std::env::var_os("APPDATA")
@@ -165,13 +170,13 @@ pub struct Config {
 }
 
 fn default_version() -> u32 {
-    1
+    CURRENT_VERSION
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            version: 1,
+            version: CURRENT_VERSION,
             window: Window::default(),
             passwords_visible: false,
             accounts: Vec::new(),
@@ -219,16 +224,122 @@ pub fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
     })
 }
 
-pub fn load() -> Config {
-    match fs::read_to_string(config_path()).ok().and_then(|t| serde_json::from_str(&t).ok()) {
-        Some(cfg) => cfg,
-        None => Config::default(),
+/// An account as it sits on disk. Credentials are base64 DPAPI blobs, the riot
+/// ID stays plaintext because it is a public game identifier.
+#[derive(Serialize, Deserialize)]
+struct StoredAccount {
+    riot_name: String,
+    tag: String,
+    #[serde(default)]
+    login_enc: String,
+    #[serde(default)]
+    password_enc: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct StoredConfig {
+    version: u32,
+    #[serde(default)]
+    window: Window,
+    #[serde(default)]
+    passwords_visible: bool,
+    #[serde(default)]
+    accounts: Vec<StoredAccount>,
+    #[serde(default, rename = "champion_pools")]
+    champion_pools: Vec<Pool>,
+}
+
+pub struct Loaded {
+    pub config: Config,
+    /// True when the file held plaintext credentials and needs rewriting.
+    pub migrated_from_v1: bool,
+}
+
+pub enum LoadError {
+    /// The file exists but cannot be parsed or decrypted. Never overwrite it.
+    Unreadable(String),
+}
+
+/// Read a config file. A missing file yields the defaults, a broken one an
+/// error, so the caller can preserve it.
+pub fn load_from(path: &Path) -> Result<Loaded, LoadError> {
+    let text = match fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Loaded { config: Config::default(), migrated_from_v1: false });
+        }
+        Err(e) => return Err(LoadError::Unreadable(format!("reading the file: {e}"))),
+    };
+
+    let value: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| LoadError::Unreadable(format!("invalid JSON: {e}")))?;
+    let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
+
+    match version {
+        0..=1 => {
+            let config: Config = serde_json::from_value(value)
+                .map_err(|e| LoadError::Unreadable(format!("invalid config: {e}")))?;
+            Ok(Loaded { config, migrated_from_v1: true })
+        }
+        2 => {
+            let stored: StoredConfig = serde_json::from_value(value)
+                .map_err(|e| LoadError::Unreadable(format!("invalid config: {e}")))?;
+            // Any decryption failure fails the whole file. A partial config
+            // would be saved back over the good one.
+            let mut accounts = Vec::with_capacity(stored.accounts.len());
+            for account in stored.accounts {
+                let login = secret::unprotect(&account.login_enc).map_err(LoadError::Unreadable)?;
+                let password =
+                    secret::unprotect(&account.password_enc).map_err(LoadError::Unreadable)?;
+                accounts.push(Account { riot_name: account.riot_name, tag: account.tag, login, password });
+            }
+            Ok(Loaded {
+                config: Config {
+                    version: CURRENT_VERSION,
+                    window: stored.window,
+                    passwords_visible: stored.passwords_visible,
+                    accounts,
+                    champion_pools: stored.champion_pools,
+                },
+                migrated_from_v1: false,
+            })
+        }
+        other => Err(LoadError::Unreadable(format!("unknown config version {other}"))),
     }
 }
 
+/// Encrypt the credentials and write the file. A failure to encrypt aborts the
+/// save rather than writing plaintext.
+pub fn save_to(path: &Path, config: &Config, keep_backup: bool) -> Result<(), String> {
+    let _ = keep_backup;
+
+    let mut accounts = Vec::with_capacity(config.accounts.len());
+    for account in &config.accounts {
+        accounts.push(StoredAccount {
+            riot_name: account.riot_name.clone(),
+            tag: account.tag.clone(),
+            login_enc: secret::protect(&account.login)?,
+            password_enc: secret::protect(&account.password)?,
+        });
+    }
+
+    let stored = StoredConfig {
+        version: CURRENT_VERSION,
+        window: config.window.clone(),
+        passwords_visible: config.passwords_visible,
+        accounts,
+        champion_pools: config.champion_pools.clone(),
+    };
+    let json = serde_json::to_string_pretty(&stored).map_err(|e| format!("serializing: {e}"))?;
+    atomic_write(path, &json)
+}
+
+pub fn load() -> Result<Loaded, LoadError> {
+    load_from(&config_path())
+}
+
 pub fn save(config: &Config) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(config).map_err(|e| format!("serializing: {e}"))?;
-    atomic_write(&config_path(), &json)
+    save_to(&config_path(), config, true)
 }
 
 pub fn load_ranks() -> std::collections::HashMap<String, String> {
@@ -241,4 +352,132 @@ pub fn load_ranks() -> std::collections::HashMap<String, String> {
 pub fn save_ranks(ranks: &std::collections::HashMap<String, String>) -> Result<(), String> {
     let json = serde_json::to_string_pretty(ranks).map_err(|e| format!("serializing: {e}"))?;
     atomic_write(&rank_cache_path(), &json)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Unique temp directory, deleted on drop.
+    struct Temp(PathBuf);
+
+    impl Temp {
+        fn new(tag: &str) -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let dir = std::env::temp_dir().join(format!("hexvault-test-{tag}-{nanos}"));
+            fs::create_dir_all(&dir).unwrap();
+            Self(dir)
+        }
+
+        fn join(&self, name: &str) -> PathBuf {
+            self.0.join(name)
+        }
+    }
+
+    impl Drop for Temp {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn sample(login: &str, password: &str) -> Config {
+        Config {
+            accounts: vec![Account {
+                riot_name: "Example".into(),
+                tag: "NA1".into(),
+                login: login.into(),
+                password: password.into(),
+            }],
+            ..Config::default()
+        }
+    }
+
+    #[test]
+    fn missing_file_yields_defaults() {
+        let temp = Temp::new("missing");
+        let loaded = load_from(&temp.join("config.json")).ok().unwrap();
+        assert!(!loaded.migrated_from_v1);
+        assert!(loaded.config.accounts.is_empty());
+    }
+
+    #[test]
+    fn v1_file_loads_as_a_migration() {
+        let temp = Temp::new("v1");
+        let path = temp.join("config.json");
+        fs::write(
+            &path,
+            r#"{
+              "version": 1,
+              "accounts": [
+                { "riot_name": "One", "tag": "NA1", "login": "login1", "password": "pw1" },
+                { "riot_name": "Two", "tag": "EUW", "login": "login2", "password": "pw2" }
+              ]
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_from(&path).ok().unwrap();
+        assert!(loaded.migrated_from_v1);
+        assert_eq!(loaded.config.accounts.len(), 2);
+        assert_eq!(loaded.config.accounts[0].login, "login1");
+        assert_eq!(loaded.config.accounts[1].password, "pw2");
+    }
+
+    #[test]
+    fn malformed_json_is_unreadable() {
+        let temp = Temp::new("malformed");
+        let path = temp.join("config.json");
+        fs::write(&path, "{ \"version\": 2, }").unwrap();
+        assert!(load_from(&path).is_err());
+    }
+
+    #[test]
+    fn a_corrupt_blob_is_unreadable() {
+        let temp = Temp::new("corrupt");
+        let path = temp.join("config.json");
+        fs::write(
+            &path,
+            r#"{
+              "version": 2,
+              "accounts": [
+                { "riot_name": "One", "tag": "NA1", "login_enc": "!!not base64!!", "password_enc": "" }
+              ]
+            }"#,
+        )
+        .unwrap();
+        assert!(load_from(&path).is_err());
+    }
+
+    #[test]
+    fn unknown_version_is_unreadable() {
+        let temp = Temp::new("future");
+        let path = temp.join("config.json");
+        fs::write(&path, r#"{ "version": 99 }"#).unwrap();
+        assert!(load_from(&path).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn save_round_trips_without_writing_plaintext() {
+        let temp = Temp::new("round-trip");
+        let path = temp.join("config.json");
+        let login = "\u{00FC}ser\u{00DF}";
+        let password = "p\u{00E4}ssw\u{00F6}rd-\u{4F60}\u{597D}";
+
+        save_to(&path, &sample(login, password), false).unwrap();
+
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("\"version\": 2"));
+        assert!(!text.contains(password));
+        assert!(!text.contains(login));
+        assert!(!text.contains("\"password\""));
+
+        let loaded = load_from(&path).ok().unwrap();
+        assert!(!loaded.migrated_from_v1);
+        assert_eq!(loaded.config.accounts[0].login, login);
+        assert_eq!(loaded.config.accounts[0].password, password);
+    }
 }

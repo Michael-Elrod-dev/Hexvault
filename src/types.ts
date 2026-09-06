@@ -44,6 +44,8 @@ export type Bootstrap = {
   has_api_key: boolean;
   champions: ChampionData;
   portrait_dir: string;
+  /** Set when the saved config needed attention at startup. */
+  warning?: string | null;
 };
 
 /** Cache identity. Must match Account::key in Rust. */
