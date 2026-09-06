@@ -13,6 +13,22 @@ const VERSIONS_URL: &str = "https://ddragon.leagueoflegends.com/api/versions.jso
 const TIMEOUT_SECS: u64 = 20;
 /// Concurrent portrait downloads.
 const PORTRAIT_CONCURRENCY: usize = 12;
+/// Caps on what the CDN is allowed to hand back.
+const MAX_PORTRAIT_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_JSON_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_CHAMPIONS: usize = 1000;
+
+/// Asset ids become path components, so they may only be plain ASCII words.
+fn valid_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+/// Versions become URL path segments, for example `16.17.1`.
+fn valid_version(version: &str) -> bool {
+    !version.is_empty()
+        && version.len() <= 32
+        && version.chars().all(|c| c.is_ascii_digit() || c == '.')
+}
 
 pub fn champions_path() -> PathBuf {
     app_dir().join("champions.json")
@@ -84,37 +100,47 @@ fn client() -> Result<reqwest::Client, String> {
         .map_err(|e| format!("building http client: {e}"))
 }
 
+/// Fetch and parse a JSON body, refusing anything over `MAX_JSON_BYTES`.
+async fn fetch_json<T: serde::de::DeserializeOwned>(
+    client: &reqwest::Client,
+    url: &str,
+    what: &str,
+) -> Result<T, String> {
+    let response = client.get(url).send().await.map_err(|e| format!("fetching {what}: {e}"))?;
+    if response.content_length().is_some_and(|len| len > MAX_JSON_BYTES) {
+        return Err(format!("{what} is larger than {MAX_JSON_BYTES} bytes"));
+    }
+    let bytes = response.bytes().await.map_err(|e| format!("reading {what}: {e}"))?;
+    if bytes.len() as u64 > MAX_JSON_BYTES {
+        return Err(format!("{what} is larger than {MAX_JSON_BYTES} bytes"));
+    }
+    serde_json::from_slice(&bytes).map_err(|e| format!("parsing {what}: {e}"))
+}
+
 async fn latest_version(client: &reqwest::Client) -> Result<String, String> {
-    let versions: Vec<String> = client
-        .get(VERSIONS_URL)
-        .send()
-        .await
-        .map_err(|e| format!("fetching versions: {e}"))?
-        .json()
-        .await
-        .map_err(|e| format!("parsing versions: {e}"))?;
-    versions.into_iter().next().ok_or_else(|| "versions.json was empty".to_string())
+    let versions: Vec<String> = fetch_json(client, VERSIONS_URL, "versions").await?;
+    let version = versions.into_iter().next().ok_or_else(|| "versions.json was empty".to_string())?;
+    if !valid_version(&version) {
+        return Err("versions.json gave a version we will not put in a URL".to_string());
+    }
+    Ok(version)
 }
 
 async fn fetch_champions(client: &reqwest::Client, version: &str) -> Result<Vec<Champion>, String> {
     let url = format!(
         "https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json"
     );
-    let file: ChampionFile = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("fetching champions: {e}"))?
-        .json()
-        .await
-        .map_err(|e| format!("parsing champions: {e}"))?;
+    let file: ChampionFile = fetch_json(client, &url, "champions").await?;
 
+    // An id we would not put in a path is skipped, not fatal.
     let mut champions: Vec<Champion> = file
         .data
         .into_values()
+        .filter(|c| valid_id(&c.id))
         .map(|c| Champion { name: c.name, id: c.id })
         .collect();
     champions.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    champions.truncate(MAX_CHAMPIONS);
     Ok(champions)
 }
 
@@ -216,14 +242,21 @@ async fn sync_portraits(
                 if !response.status().is_success() {
                     return None;
                 }
+                if response.content_length().is_some_and(|len| len > MAX_PORTRAIT_BYTES) {
+                    return None;
+                }
                 let etag = response
                     .headers()
                     .get(reqwest::header::ETAG)
                     .and_then(|v| v.to_str().ok())
                     .map(|s| s.to_string());
                 let Ok(bytes) = response.bytes().await else { return None };
+                if bytes.len() as u64 > MAX_PORTRAIT_BYTES {
+                    return None;
+                }
                 // Write to a temp name then rename, so a half-written PNG is
                 // never visible to the webview.
+                debug_assert!(valid_id(&id));
                 let final_path = dir.join(format!("{id}.png"));
                 let tmp = dir.join(format!(".{id}.png.tmp"));
                 if fs::write(&tmp, &bytes).is_err() {
@@ -279,4 +312,40 @@ pub async fn refresh() -> Result<RefreshOutcome, String> {
     }
 
     Ok(RefreshOutcome { data, changed: list_changed || downloaded > 0 })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_real_champion_ids() {
+        for id in ["Aatrox", "KSante", "MonkeyKing", "Belveth", "Kaisa", "Nunu"] {
+            assert!(valid_id(id), "{id} should be accepted");
+        }
+    }
+
+    #[test]
+    fn rejects_ids_that_could_escape_the_portrait_directory() {
+        for id in ["", "../x", "..", "C:/x", "C:\\x", "Aatrox.png", "a b", "/etc/passwd", "a\\b"] {
+            assert!(!valid_id(id), "{id} should be rejected");
+        }
+        assert!(!valid_id(&"a".repeat(65)));
+        assert!(valid_id(&"a".repeat(64)));
+    }
+
+    #[test]
+    fn accepts_real_versions() {
+        for version in ["16.17.1", "1", "14.24.1"] {
+            assert!(valid_version(version), "{version} should be accepted");
+        }
+    }
+
+    #[test]
+    fn rejects_versions_that_are_not_numbers_and_dots() {
+        for version in ["", "lolpatch_3.7", "../16.17.1", "16.17.1/x", "16 17"] {
+            assert!(!valid_version(version), "{version} should be rejected");
+        }
+        assert!(!valid_version(&"1".repeat(33)));
+    }
 }
