@@ -21,7 +21,8 @@
         "center": true,
         "theme": "Dark",
         "backgroundColor": "#1a1b1e",
-        "decorations": false
+        "decorations": false,
+        "dragDropEnabled": false
       }
     ],
     "security": {
