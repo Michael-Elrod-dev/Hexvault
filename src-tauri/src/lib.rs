@@ -10,6 +10,9 @@ use std::collections::HashMap;
 use config::Config;
 use tauri::{Emitter, Manager};
 
+/// How long a copied value stays on the clipboard.
+const CLIPBOARD_TTL_SECS: u64 = 30;
+
 /// Everything the first paint needs, read from disk. No network.
 #[derive(serde::Serialize)]
 pub struct Bootstrap {
@@ -71,6 +74,46 @@ fn save_config(config: Config) -> Result<(), String> {
     config::save(&config)
 }
 
+/// Put text on the clipboard, kept out of clipboard history and cloud sync.
+#[cfg(windows)]
+fn write_clipboard(text: &str) -> Result<(), String> {
+    use arboard::SetExtWindows;
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    clipboard
+        .set()
+        .exclude_from_history()
+        .exclude_from_cloud()
+        .text(text.to_string())
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(not(windows))]
+fn write_clipboard(text: &str) -> Result<(), String> {
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    clipboard.set_text(text.to_string()).map_err(|e| e.to_string())
+}
+
+/// Drop the clipboard only if it still holds what we put there, so a value the
+/// user copied somewhere else is never wiped.
+fn clear_clipboard_if_unchanged(text: &str) {
+    let Ok(mut clipboard) = arboard::Clipboard::new() else { return };
+    if clipboard.get_text().is_ok_and(|current| current == text) {
+        let _ = clipboard.clear();
+    }
+}
+
+/// Copy text with clipboard history and cloud sync excluded, then clear it
+/// after CLIPBOARD_TTL_SECS if it is still what we put there.
+#[tauri::command]
+fn copy_text(text: String) -> Result<(), String> {
+    write_clipboard(&text)?;
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(CLIPBOARD_TTL_SECS)).await;
+        clear_clipboard_if_unchanged(&text);
+    });
+    Ok(())
+}
+
 /// Look up every account's rank concurrently. The API key is read here and
 /// never crosses into the webview.
 #[tauri::command]
@@ -91,8 +134,7 @@ async fn fetch_ranks(accounts: Vec<config::Account>) -> Result<HashMap<String, S
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_clipboard_manager::init())
-        .invoke_handler(tauri::generate_handler![bootstrap, save_config, fetch_ranks])
+        .invoke_handler(tauri::generate_handler![bootstrap, save_config, fetch_ranks, copy_text])
         .setup(|app| {
             // Restore saved window geometry, clamped to the current monitor.
             if let Some(window) = app.get_webview_window("main") {

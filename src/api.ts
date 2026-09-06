@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Account, Bootstrap, Config } from "./types";
 import { isTauri, mockBootstrap, mockRanks } from "./mock";
 
@@ -18,10 +17,11 @@ export const saveConfig = async (config: Config): Promise<void> => {
 export const fetchRanks = async (accounts: Account[]): Promise<Record<string, string>> =>
   useMock() ? mockRanks() : invoke<Record<string, string>>("fetch_ranks", { accounts });
 
+/** Rust excludes the value from clipboard history and clears it after 30 s. */
 export const copyText = async (text: string): Promise<void> => {
   if (useMock()) {
     await navigator.clipboard?.writeText(text).catch(() => {});
     return;
   }
-  return writeText(text);
+  return invoke<void>("copy_text", { text });
 };
