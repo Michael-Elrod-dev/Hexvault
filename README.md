@@ -26,9 +26,9 @@ npm run tauri build
 Produces `src-tauri/target/release/hexvault.exe` (~5 MB) and an installer under
 `src-tauri/target/release/bundle/nsis/`.
 
-The built exe reads `.env` from its own directory, the working directory, or
-`%APPDATA%\Hexvault\`. Putting a copy in `%APPDATA%\Hexvault\.env` makes it work
-no matter where it is launched from.
+The built exe reads `.env` from its own directory or `%APPDATA%\Hexvault\`.
+Putting a copy in `%APPDATA%\Hexvault\.env` makes it work no matter where it is
+launched from.
 
 ## Using it
 

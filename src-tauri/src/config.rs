@@ -34,16 +34,15 @@ pub fn rank_cache_path() -> PathBuf {
     app_dir().join("ranks.json")
 }
 
-/// Directories searched for `.env`. Exe dir, then cwd, then app data dir.
+/// Directories searched for `.env`. The exe directory, then the app data
+/// directory. The working directory is deliberately not searched, a shortcut's
+/// "Start in" setting should not decide where the API key comes from.
 fn env_search_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             roots.push(dir.to_path_buf());
         }
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        roots.push(cwd);
     }
     roots.push(app_dir());
     roots
