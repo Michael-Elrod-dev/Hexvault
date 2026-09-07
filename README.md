@@ -150,3 +150,7 @@ webview would keep serving its cached copy of the old art.
 - **The asset protocol scope is granted at runtime.** `lib.rs` allows the
   portraits directory during setup, so a portrait that renders online but not
   offline means that grant failed.
+
+## License
+
+MIT. See `LICENSE`.

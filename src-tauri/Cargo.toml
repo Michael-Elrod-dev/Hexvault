@@ -2,6 +2,7 @@
 name = "hexvault"
 version = "1.0.0"
 description = "Hexvault"
+license = "MIT"
 authors = ["Michael Elrod"]
 edition = "2021"
 
