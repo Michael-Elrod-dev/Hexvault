@@ -27,20 +27,12 @@ pub struct Bootstrap {
     warning: Option<String>,
 }
 
-/// Read the config, rewriting a plaintext file as encrypted and preserving one
-/// that cannot be read. The second value is a message for the user.
+/// Read the config, preserving a file that cannot be read. The second value is
+/// a message for the user.
 fn read_config() -> (Config, Option<String>) {
     let path = config::config_path();
     match config::load() {
-        Ok(loaded) if loaded.migrated_from_v1 => {
-            let warning = config::save_to(&path, &loaded.config, false)
-                .err()
-                .map(|e| format!("Saved accounts could not be encrypted ({e})."));
-            // A plaintext backup must not outlive the upgrade.
-            let _ = std::fs::remove_file(path.with_extension("json.bak"));
-            (loaded.config, warning)
-        }
-        Ok(loaded) => (loaded.config, None),
+        Ok(config) => (config, None),
         Err(config::LoadError::Unreadable(reason)) => {
             let warning = match config::quarantine(&path) {
                 Some(kept) => format!(
@@ -144,7 +136,7 @@ pub fn run() {
 
             // Restore saved window geometry, clamped to the current monitor.
             if let Some(window) = app.get_webview_window("main") {
-                let saved = config::load().map(|l| l.config).unwrap_or_default().window;
+                let saved = config::load().unwrap_or_default().window;
                 if let Ok(Some(monitor)) = window.current_monitor() {
                     let bounds = monitor.size();
                     let scale = monitor.scale_factor();

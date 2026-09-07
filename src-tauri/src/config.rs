@@ -265,12 +265,6 @@ struct StoredConfig {
     champion_pools: Vec<Pool>,
 }
 
-pub struct Loaded {
-    pub config: Config,
-    /// True when the file held plaintext credentials and needs rewriting.
-    pub migrated_from_v1: bool,
-}
-
 pub enum LoadError {
     /// The file exists but cannot be parsed or decrypted. Never overwrite it.
     Unreadable(String),
@@ -278,55 +272,39 @@ pub enum LoadError {
 
 /// Read a config file. A missing file yields the defaults, a broken one an
 /// error, so the caller can preserve it.
-pub fn load_from(path: &Path) -> Result<Loaded, LoadError> {
+pub fn load_from(path: &Path) -> Result<Config, LoadError> {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(Loaded { config: Config::default(), migrated_from_v1: false });
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Config::default()),
         Err(e) => return Err(LoadError::Unreadable(format!("reading the file: {e}"))),
     };
 
-    let value: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| LoadError::Unreadable(format!("invalid JSON: {e}")))?;
-    let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
-
-    match version {
-        0..=1 => {
-            let config: Config = serde_json::from_value(value)
-                .map_err(|e| LoadError::Unreadable(format!("invalid config: {e}")))?;
-            Ok(Loaded { config, migrated_from_v1: true })
-        }
-        2 => {
-            let stored: StoredConfig = serde_json::from_value(value)
-                .map_err(|e| LoadError::Unreadable(format!("invalid config: {e}")))?;
-            // Any decryption failure fails the whole file. A partial config
-            // would be saved back over the good one.
-            let mut accounts = Vec::with_capacity(stored.accounts.len());
-            for account in stored.accounts {
-                let login = secret::unprotect(&account.login_enc).map_err(LoadError::Unreadable)?;
-                let password =
-                    secret::unprotect(&account.password_enc).map_err(LoadError::Unreadable)?;
-                accounts.push(Account { riot_name: account.riot_name, tag: account.tag, login, password });
-            }
-            Ok(Loaded {
-                config: Config {
-                    version: CURRENT_VERSION,
-                    window: stored.window,
-                    passwords_visible: stored.passwords_visible,
-                    accounts,
-                    champion_pools: stored.champion_pools,
-                },
-                migrated_from_v1: false,
-            })
-        }
-        other => Err(LoadError::Unreadable(format!("unknown config version {other}"))),
+    let stored: StoredConfig = serde_json::from_str(&text)
+        .map_err(|e| LoadError::Unreadable(format!("invalid config: {e}")))?;
+    if stored.version != CURRENT_VERSION {
+        return Err(LoadError::Unreadable(format!("unknown config version {}", stored.version)));
     }
+
+    // Any decryption failure fails the whole file. A partial config would be
+    // saved back over the good one.
+    let mut accounts = Vec::with_capacity(stored.accounts.len());
+    for account in stored.accounts {
+        let login = secret::unprotect(&account.login_enc).map_err(LoadError::Unreadable)?;
+        let password = secret::unprotect(&account.password_enc).map_err(LoadError::Unreadable)?;
+        accounts.push(Account { riot_name: account.riot_name, tag: account.tag, login, password });
+    }
+    Ok(Config {
+        version: CURRENT_VERSION,
+        window: stored.window,
+        passwords_visible: stored.passwords_visible,
+        accounts,
+        champion_pools: stored.champion_pools,
+    })
 }
 
 /// Encrypt the credentials and write the file. An encryption failure aborts
 /// the save, so plaintext is never written.
-pub fn save_to(path: &Path, config: &Config, keep_backup: bool) -> Result<(), String> {
+pub fn save_to(path: &Path, config: &Config) -> Result<(), String> {
     let mut accounts = Vec::with_capacity(config.accounts.len());
     for account in &config.accounts {
         accounts.push(StoredAccount {
@@ -345,20 +323,15 @@ pub fn save_to(path: &Path, config: &Config, keep_backup: bool) -> Result<(), St
         champion_pools: config.champion_pools.clone(),
     };
     let json = serde_json::to_string_pretty(&stored).map_err(|e| format!("serializing: {e}"))?;
-
-    // Keep the previous file. A failed copy must not block the save.
-    if keep_backup && path.exists() {
-        let _ = fs::copy(path, path.with_extension("json.bak"));
-    }
     atomic_write(path, &json)
 }
 
-pub fn load() -> Result<Loaded, LoadError> {
+pub fn load() -> Result<Config, LoadError> {
     load_from(&config_path())
 }
 
 pub fn save(config: &Config) -> Result<(), String> {
-    save_to(&config_path(), config, true)
+    save_to(&config_path(), config)
 }
 
 pub fn load_ranks() -> std::collections::HashMap<String, String> {
@@ -417,32 +390,8 @@ mod tests {
     #[test]
     fn missing_file_yields_defaults() {
         let temp = Temp::new("missing");
-        let loaded = load_from(&temp.join("config.json")).ok().unwrap();
-        assert!(!loaded.migrated_from_v1);
-        assert!(loaded.config.accounts.is_empty());
-    }
-
-    #[test]
-    fn v1_file_loads_as_a_migration() {
-        let temp = Temp::new("v1");
-        let path = temp.join("config.json");
-        fs::write(
-            &path,
-            r#"{
-              "version": 1,
-              "accounts": [
-                { "riot_name": "One", "tag": "NA1", "login": "login1", "password": "pw1" },
-                { "riot_name": "Two", "tag": "EUW", "login": "login2", "password": "pw2" }
-              ]
-            }"#,
-        )
-        .unwrap();
-
-        let loaded = load_from(&path).ok().unwrap();
-        assert!(loaded.migrated_from_v1);
-        assert_eq!(loaded.config.accounts.len(), 2);
-        assert_eq!(loaded.config.accounts[0].login, "login1");
-        assert_eq!(loaded.config.accounts[1].password, "pw2");
+        let config = load_from(&temp.join("config.json")).ok().unwrap();
+        assert!(config.accounts.is_empty());
     }
 
     #[test]
@@ -512,7 +461,7 @@ mod tests {
         let login = "\u{00FC}ser\u{00DF}";
         let password = "p\u{00E4}ssw\u{00F6}rd-\u{4F60}\u{597D}";
 
-        save_to(&path, &sample(login, password), false).unwrap();
+        save_to(&path, &sample(login, password)).unwrap();
 
         let text = fs::read_to_string(&path).unwrap();
         assert!(text.contains("\"version\": 2"));
@@ -520,36 +469,8 @@ mod tests {
         assert!(!text.contains(login));
         assert!(!text.contains("\"password\""));
 
-        let loaded = load_from(&path).ok().unwrap();
-        assert!(!loaded.migrated_from_v1);
-        assert_eq!(loaded.config.accounts[0].login, login);
-        assert_eq!(loaded.config.accounts[0].password, password);
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn saving_keeps_one_previous_version() {
-        let temp = Temp::new("backup");
-        let path = temp.join("config.json");
-        let bak = temp.join("config.json.bak");
-
-        save_to(&path, &sample("first", "pw1"), true).unwrap();
-        assert!(!bak.exists());
-        let first = fs::read_to_string(&path).unwrap();
-
-        save_to(&path, &sample("second", "pw2"), true).unwrap();
-        assert_eq!(fs::read_to_string(&bak).unwrap(), first);
-        assert_eq!(load_from(&path).ok().unwrap().config.accounts[0].login, "second");
-        assert_eq!(load_from(&bak).ok().unwrap().config.accounts[0].login, "first");
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn a_migration_save_writes_no_backup() {
-        let temp = Temp::new("no-backup");
-        let path = temp.join("config.json");
-        save_to(&path, &sample("first", "pw1"), true).unwrap();
-        save_to(&path, &sample("second", "pw2"), false).unwrap();
-        assert!(!temp.join("config.json.bak").exists());
+        let config = load_from(&path).ok().unwrap();
+        assert_eq!(config.accounts[0].login, login);
+        assert_eq!(config.accounts[0].password, password);
     }
 }
