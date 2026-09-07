@@ -106,10 +106,9 @@ Rust owns data and network. React is a pure view layer.
 ```
 src/
   App.tsx                 state, persistence, shortcuts
-  api.ts                  Tauri command bridge (mock fallback in browser dev)
+  api.ts                  Tauri command bridge
   types.ts                shared types, rank parsing, tier colours
   champions.ts            portrait URLs, asset ids, picker search
-  mock.ts                 placeholder data for browser dev only
   styles.css              Tailwind v4 and the design tokens
   components/             AccountsPage, ChampionsPage, AccountDialog,
                           TitleBar, ScrollArea, Portrait, Toast
@@ -119,7 +118,6 @@ src-tauri/src/
   ddragon.rs              champion index + portrait cache, background refresh
   lib.rs                  Tauri commands and window setup
   secret.rs               DPAPI credential encryption
-tools/screenshot.mjs      headless UI capture
 ```
 
 Riot API calls run in Rust because the API sends no CORS headers, so a `fetch`
@@ -141,23 +139,7 @@ changed, so a visual rework is picked up even though the champion's name and id
 stay the same. The version is also appended to the `asset://` URL, otherwise the
 webview would keep serving its cached copy of the old art.
 
-## Working on the UI
-
-```bash
-npm run dev        # http://localhost:1420 in any browser
-npm run shot       # renders the UI to screenshots/ via headless Edge
-```
-
-Outside Tauri the frontend falls back to placeholder data (`src/mock.ts`), so
-the whole UI can be designed in a normal browser with hot reload. No Rust
-rebuild, and no real credentials on screen.
-
-Anything that touches window controls, drag-and-drop, or the asset protocol
-must be verified in the built app. A plain browser has neither Tauri's
-permission system nor its OS integration, so those paths can pass in the
-browser and still fail in the window.
-
-### Things that fail silently
+## Things that fail silently
 
 - **Window APIs are permission-gated.** Any `getCurrentWindow()` or event call
   needs a matching entry in `src-tauri/capabilities/default.json`. A missing

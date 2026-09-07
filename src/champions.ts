@@ -1,5 +1,4 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { isTauri } from "./mock";
 import type { Champion } from "./types";
 
 /**
@@ -41,7 +40,7 @@ export function localPortrait(
   portraitDir: string,
   version: string,
 ): string | null {
-  if (!isTauri() || !portraitDir) return null;
+  if (!portraitDir) return null;
   const separator = portraitDir.includes("\\") ? "\\" : "/";
   const src = convertFileSrc(`${portraitDir}${separator}${id}.png`);
   return version ? `${src}?v=${encodeURIComponent(version)}` : src;

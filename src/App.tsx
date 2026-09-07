@@ -5,7 +5,6 @@ import { listen } from "@tauri-apps/api/event";
 import * as api from "./api";
 import type { Account, Champion, ChampionData, Config } from "./types";
 import { accountKey, parseRank } from "./types";
-import { isTauri } from "./mock";
 import { guessId } from "./champions";
 import { AccountsPage } from "./components/AccountsPage";
 import { ChampionsPage } from "./components/ChampionsPage";
@@ -80,23 +79,19 @@ export default function App() {
     const current = latest.current;
     if (!current) return;
     try {
-      let payload = current;
-      if (isTauri()) {
-        const window_ = getCurrentWindow();
-        const scale = await window_.scaleFactor();
-        const inner = (await window_.innerSize()).toLogical(scale);
-        const position = (await window_.outerPosition()).toLogical(scale);
-        payload = {
-          ...current,
-          window: {
-            width: Math.round(inner.width),
-            height: Math.round(inner.height),
-            x: Math.round(position.x),
-            y: Math.round(position.y),
-          },
-        };
-      }
-      await api.saveConfig(payload);
+      const window_ = getCurrentWindow();
+      const scale = await window_.scaleFactor();
+      const inner = (await window_.innerSize()).toLogical(scale);
+      const position = (await window_.outerPosition()).toLogical(scale);
+      await api.saveConfig({
+        ...current,
+        window: {
+          width: Math.round(inner.width),
+          height: Math.round(inner.height),
+          x: Math.round(position.x),
+          y: Math.round(position.y),
+        },
+      });
     } catch (e) {
       notify(`Save failed: ${e}`);
     }
@@ -189,7 +184,6 @@ export default function App() {
 
   // Redraw when the background champion refresh finds something new.
   useEffect(() => {
-    if (!isTauri()) return;
     const unlisten = listen<ChampionData>("champions-updated", (event) => {
       if (event.payload?.champions?.length) setChampions(event.payload);
     });
@@ -246,7 +240,6 @@ export default function App() {
   }, [refresh, refreshing, saveNow]);
 
   useEffect(() => {
-    if (!isTauri()) return;
     const unlisten = getCurrentWindow().onCloseRequested(async () => {
       await Promise.race([
         saveNow().catch(() => {}),
@@ -259,7 +252,6 @@ export default function App() {
   }, [saveNow]);
 
   useEffect(() => {
-    if (!isTauri()) return;
     const unlisten = getCurrentWindow().onResized(() => scheduleSave());
     return () => {
       void unlisten.then((f) => f());
