@@ -8,6 +8,30 @@ credentials, live solo-queue ranks, and per-role champion pools.
 Tauri 2 (Rust) + React + Tailwind. Windows-focused. It renders in WebView2,
 which ships with Windows 11.
 
+## Setup
+
+Download the installer from the
+[latest release](https://github.com/Michael-Elrod-dev/Hexvault/releases/latest)
+and run it. It installs per-user and does not ask for administrator rights.
+SmartScreen will warn about an unknown publisher, so check the SHA-256 in the
+release notes before running it.
+
+Rank lookups need your own Riot API key. Sign in at
+<https://developer.riotgames.com/> with your Riot account. The key on the
+dashboard is a development key and stops working after 24 hours, so register a
+personal key instead. Press **Register Product**, choose the personal option,
+and describe what you are using it for. A personal key does not expire daily and
+allows 20 requests per second, which is far more than this app needs.
+
+Put the key in `%APPDATA%\Hexvault\.env`, as one line.
+
+```
+RIOT_API_KEY=RGAPI-your-key-here
+```
+
+Restart Hexvault. Accounts and champion pools work without a key. Ranks stay
+blank until one is set.
+
 ## Running from source
 
 ```bash
@@ -15,9 +39,6 @@ npm install
 cp .env.example .env      # then paste your Riot API key into it
 npm run tauri dev
 ```
-
-Get an API key at <https://developer.riotgames.com/>. Development keys expire
-every 24 hours. A personal or production key lasts longer.
 
 ## Building
 
@@ -156,3 +177,8 @@ webview would keep serving its cached copy of the old art.
 ## License
 
 MIT. See `LICENSE`.
+
+Hexvault isn't endorsed by Riot Games and doesn't reflect the views or opinions
+of Riot Games or anyone officially involved in producing or managing Riot Games
+properties. Riot Games, and all associated properties are trademarks or
+registered trademarks of Riot Games, Inc.
