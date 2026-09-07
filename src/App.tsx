@@ -15,7 +15,6 @@ import { TitleBar } from "./components/TitleBar";
 
 const SAVE_DEBOUNCE_MS = 800;
 const TOAST_HOLD_MS = 1700;
-/** Long enough to read a startup warning about the saved config. */
 const WARNING_HOLD_MS = 8000;
 const FLASH_MS = 200;
 
@@ -83,8 +82,6 @@ export default function App() {
     try {
       let payload = current;
       if (isTauri()) {
-        // innerSize, not outerSize. The outer size includes the resize border,
-        // and restoring it makes the window grow a little on every launch.
         const window_ = getCurrentWindow();
         const scale = await window_.scaleFactor();
         const inner = (await window_.innerSize()).toLogical(scale);

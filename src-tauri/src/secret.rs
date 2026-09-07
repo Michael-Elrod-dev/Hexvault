@@ -11,8 +11,8 @@ mod imp {
         CryptProtectData, CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
 
-    /// Optional entropy mixed into every blob. Not a secret, the source is
-    /// public. It stops generic DPAPI tools reading the blob without it.
+    /// Extra entropy mixed into every blob. Not a secret, but generic DPAPI
+    /// tools cannot read the blob without it.
     const ENTROPY: &[u8] = b"Hexvault-v1";
     const DESCRIPTION: &str = "Hexvault credentials";
 

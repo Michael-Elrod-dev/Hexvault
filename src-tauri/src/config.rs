@@ -34,9 +34,8 @@ pub fn rank_cache_path() -> PathBuf {
     app_dir().join("ranks.json")
 }
 
-/// Directories searched for `.env`. The exe directory, then the app data
-/// directory. The working directory is deliberately not searched, a shortcut's
-/// "Start in" setting should not decide where the API key comes from.
+/// Directories searched for `.env`. Exe dir, then app data dir. The working
+/// directory is skipped so a shortcut's "Start in" cannot pick the key.
 fn env_search_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
@@ -203,8 +202,7 @@ fn default_pools() -> Vec<Pool> {
 }
 
 /// Write to a temp file in the same directory, then rename over the target.
-/// Same-volume rename is atomic on Windows. The temp file never outlives a
-/// failure.
+/// Same-volume rename is atomic on Windows. The temp file is removed on failure.
 pub fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
     let parent = path.parent().ok_or_else(|| "config path has no parent".to_string())?;
     fs::create_dir_all(parent).map_err(|e| format!("creating {}: {e}", parent.display()))?;
@@ -242,8 +240,8 @@ pub fn quarantine(path: &Path) -> Option<PathBuf> {
     fs::rename(path, &kept).ok().map(|()| kept)
 }
 
-/// An account as it sits on disk. Credentials are base64 DPAPI blobs, the riot
-/// ID stays plaintext because it is a public game identifier.
+/// An account as stored on disk. Credentials are base64 DPAPI blobs. The riot
+/// ID is plaintext.
 #[derive(Serialize, Deserialize)]
 struct StoredAccount {
     riot_name: String,
@@ -326,8 +324,8 @@ pub fn load_from(path: &Path) -> Result<Loaded, LoadError> {
     }
 }
 
-/// Encrypt the credentials and write the file. A failure to encrypt aborts the
-/// save rather than writing plaintext.
+/// Encrypt the credentials and write the file. An encryption failure aborts
+/// the save, so plaintext is never written.
 pub fn save_to(path: &Path, config: &Config, keep_backup: bool) -> Result<(), String> {
     let mut accounts = Vec::with_capacity(config.accounts.len());
     for account in &config.accounts {

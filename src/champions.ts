@@ -11,7 +11,6 @@ const SPECIAL_IDS: Record<string, string> = {
   "Cho'Gath": "Chogath",
   "Kai'Sa": "Kaisa",
   "Kha'Zix": "Khazix",
-  // Stripping non-letters gives "Ksante", which 403s.
   "K'Sante": "KSante",
   "K'sante": "KSante",
   LeBlanc: "Leblanc",

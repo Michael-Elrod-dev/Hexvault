@@ -61,7 +61,7 @@ Nothing is stored in the repo.
 
 | Path | Contents |
 |---|---|
-| `%APPDATA%\Hexvault\config.json` | Accounts, credentials, champion pools, window size |
+| `%APPDATA%\Hexvault\config.json` | Accounts, encrypted credentials, champion pools, window size |
 | `%APPDATA%\Hexvault\ranks.json` | Cached ranks |
 | `%APPDATA%\Hexvault\champions.json` | Champion names and Data Dragon asset ids |
 | `%APPDATA%\Hexvault\portraits\` | Cached champion portraits (~4.6 MB) |
@@ -118,6 +118,7 @@ src-tauri/src/
   riot.rs                 concurrent Riot API client
   ddragon.rs              champion index + portrait cache, background refresh
   lib.rs                  Tauri commands and window setup
+  secret.rs               DPAPI credential encryption
 tools/screenshot.mjs      headless UI capture
 ```
 
@@ -158,10 +159,9 @@ browser and still fail in the window.
 
 ### Things that fail silently
 
-- **Window APIs are permission-gated.** Any `getCurrentWindow()` call needs a
-  matching entry in `src-tauri/capabilities/default.json` (`allow-close`,
-  `allow-minimize`, `allow-toggle-maximize`, `allow-start-dragging`,
-  `allow-destroy`). A missing permission rejects the call with no visible error.
+- **Window APIs are permission-gated.** Any `getCurrentWindow()` or event call
+  needs a matching entry in `src-tauri/capabilities/default.json`. A missing
+  permission rejects the call with no visible error.
 - **HTML5 drag-and-drop needs `dragDropEnabled: false`.** Tauri's OS-level
   file-drop handler otherwise intercepts drag events inside the webview on
   Windows.

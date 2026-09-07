@@ -17,7 +17,7 @@ export const saveConfig = async (config: Config): Promise<void> => {
 export const fetchRanks = async (accounts: Account[]): Promise<Record<string, string>> =>
   useMock() ? mockRanks() : invoke<Record<string, string>>("fetch_ranks", { accounts });
 
-/** Rust excludes the value from clipboard history and clears it after 30 s. */
+/** Rust keeps the value out of clipboard history and clears it after 30 seconds. */
 export const copyText = async (text: string): Promise<void> => {
   if (useMock()) {
     await navigator.clipboard?.writeText(text).catch(() => {});

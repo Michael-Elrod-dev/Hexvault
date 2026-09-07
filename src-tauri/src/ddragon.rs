@@ -121,7 +121,7 @@ async fn latest_version(client: &reqwest::Client) -> Result<String, String> {
     let versions: Vec<String> = fetch_json(client, VERSIONS_URL, "versions").await?;
     let version = versions.into_iter().next().ok_or_else(|| "versions.json was empty".to_string())?;
     if !valid_version(&version) {
-        return Err("versions.json gave a version we will not put in a URL".to_string());
+        return Err("versions.json gave an invalid version".to_string());
     }
     Ok(version)
 }
@@ -132,7 +132,7 @@ async fn fetch_champions(client: &reqwest::Client, version: &str) -> Result<Vec<
     );
     let file: ChampionFile = fetch_json(client, &url, "champions").await?;
 
-    // An id we would not put in a path is skipped, not fatal.
+    // Ids that cannot be path components are skipped.
     let mut champions: Vec<Champion> = file
         .data
         .into_values()
