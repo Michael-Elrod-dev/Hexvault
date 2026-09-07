@@ -1,5 +1,7 @@
 # Hexvault
 
+[![CI](https://github.com/Michael-Elrod-dev/Hexvault/actions/workflows/ci.yml/badge.svg)](https://github.com/Michael-Elrod-dev/Hexvault/actions/workflows/ci.yml)
+
 A desktop app for managing League of Legends accounts. Click-to-copy
 credentials, live solo-queue ranks, and per-role champion pools.
 
@@ -107,7 +109,7 @@ Rust owns data and network. React is a pure view layer.
 src/
   App.tsx                 state, persistence, shortcuts
   api.ts                  Tauri command bridge
-  types.ts                shared types, rank parsing, tier colours
+  types.ts                shared types, rank parsing, tier colors
   champions.ts            portrait URLs, asset ids, picker search
   styles.css              Tailwind v4 and the design tokens
   components/             AccountsPage, ChampionsPage, AccountDialog,

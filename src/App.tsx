@@ -161,10 +161,10 @@ export default function App() {
   /* ---------- startup ---------- */
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     (async () => {
       const boot = await api.bootstrap();
-      if (cancelled) return;
+      if (canceled) return;
       setConfig(boot.config);
       latest.current = boot.config;
       setRanks(boot.ranks);
@@ -178,7 +178,7 @@ export default function App() {
       if (boot.has_api_key) void refresh(boot.config.accounts, true);
     })();
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [notify, refresh]);
 
