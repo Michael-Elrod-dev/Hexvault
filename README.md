@@ -1,5 +1,7 @@
 # Hexvault
 
+[![CI](https://github.com/Michael-Elrod-dev/Hexvault/actions/workflows/ci.yml/badge.svg)](https://github.com/Michael-Elrod-dev/Hexvault/actions/workflows/ci.yml)
+
 A desktop app for managing League of Legends accounts. Click-to-copy
 credentials, live solo-queue ranks, and per-role champion pools.
 

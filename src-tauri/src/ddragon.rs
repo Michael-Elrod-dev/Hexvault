@@ -139,7 +139,7 @@ async fn fetch_champions(client: &reqwest::Client, version: &str) -> Result<Vec<
         .filter(|c| valid_id(&c.id))
         .map(|c| Champion { name: c.name, id: c.id })
         .collect();
-    champions.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    champions.sort_by_key(|c| c.name.to_lowercase());
     champions.truncate(MAX_CHAMPIONS);
     Ok(champions)
 }
